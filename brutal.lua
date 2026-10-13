@@ -8,13 +8,13 @@ local LocalPlayer = Players.LocalPlayer
 local ESP_KILLER = false
 local ESP_PALLET = false
 local ESP_GENERATOR = false
+local ESP_DISTANCE = true
 local AUTO_PARRY = false
 local PARRY_RADIUS = 15
 local PARRY_KEY = Enum.KeyCode.Q
 local PARRY_COOLDOWN = 0.3
 local lastParry = 0
 
-local ESP_DISTANCE = true
 local SPEED_ENABLED = false
 local SPEED_VALUE = 32
 local JUMP_ENABLED = false
@@ -22,6 +22,9 @@ local JUMP_VALUE = 80
 local NOCLIP_ENABLED = false
 local FLY_ENABLED = false
 local FLY_SPEED = 50
+
+local FOV_ENABLED = false
+local FOV_VALUE = 70
 
 local KILLER_COLOR = Color3.fromRGB(255, 0, 0)
 local PALLET_COLOR = Color3.fromRGB(255, 255, 255)
@@ -33,11 +36,8 @@ local generatorESP = {}
 
 local connections = {}
 local loops = {}
-
-local currentFOV = 70
-local fovLocked = true
-local menuMinimized = false
 local bindingMode = nil
+local menuMinimized = false
 
 local BIND_FILE = "brutal_binds.json"
 
@@ -316,11 +316,10 @@ local function createToggle(parent, text, callback)
     return btn
 end
 
--- Новая функция: кнопка-состояние с автоматическим [ON]/[OFF]
 local function createStateButton(parent, text, getState, setState)
     local btn = Instance.new("TextButton")
-    btn.Size = UDim2.new(1, 0, 0, 36)
-    btn.Position = UDim2.new(0, 0, 0, 0)
+    btn.Size = UDim2.new(0.9, 0, 0, 36)
+    btn.Position = UDim2.new(0.05, 0, 0, 0)
     btn.BackgroundColor3 = Color3.fromRGB(40, 40, 40)
     btn.Text = text .. "   [" .. (getState() and "ON" or "OFF") .. "]"
     btn.TextColor3 = Color3.fromRGB(255, 255, 255)
@@ -356,11 +355,10 @@ local function createStateButton(parent, text, getState, setState)
     return btn, refresh
 end
 
--- Новая функция: раскрывающийся заголовок с содержимым
 local function createCollapsible(parent, titleText, buildContent)
     local container = Instance.new("Frame")
-    container.Size = UDim2.new(0.95, 0, 0, 40)
-    container.Position = UDim2.new(0.025, 0, 0, 0)
+    container.Size = UDim2.new(1, 0, 0, 40)
+    container.Position = UDim2.new(0, 0, 0, 0)
     container.BackgroundColor3 = Color3.fromRGB(30, 30, 30)
     container.BorderSizePixel = 0
     container.Parent = parent
@@ -387,29 +385,17 @@ local function createCollapsible(parent, titleText, buildContent)
 
     local expanded = false
     local content = Instance.new("Frame")
-    content.Size = UDim2.new(0.95, 0, 0, 80)
-    content.Position = UDim2.new(0.025, 0, 0, 0)
-    content.BackgroundColor3 = Color3.fromRGB(25, 25, 25)
+    content.Size = UDim2.new(1, 0, 0, 80)
+    content.Position = UDim2.new(0, 0, 0, 0)
+    content.BackgroundTransparency = 1
     content.BorderSizePixel = 0
     content.Visible = false
     content.Parent = parent
-    local conCorner = Instance.new("UICorner")
-    conCorner.CornerRadius = UDim.new(0, 10)
-    conCorner.Parent = content
-    local conStroke = Instance.new("UIStroke")
-    conStroke.Color = Color3.fromRGB(80, 80, 80)
-    conStroke.Thickness = 1
-    conStroke.Parent = content
-
     local conLayout = Instance.new("UIListLayout")
     conLayout.Padding = UDim.new(0, 6)
     conLayout.SortOrder = Enum.SortOrder.LayoutOrder
     conLayout.HorizontalAlignment = Enum.HorizontalAlignment.Center
     conLayout.Parent = content
-    local conPadding = Instance.new("UIPadding")
-    conPadding.PaddingTop = UDim.new(0, 6)
-    conPadding.PaddingBottom = UDim.new(0, 6)
-    conPadding.Parent = content
 
     buildContent(content)
 
@@ -428,8 +414,8 @@ end
 
 local function createColorButton(parent, text, callback)
     local btn = Instance.new("TextButton")
-    btn.Size = UDim2.new(1, 0, 0, 32)
-    btn.Position = UDim2.new(0, 0, 0, 0)
+    btn.Size = UDim2.new(0.9, 0, 0, 32)
+    btn.Position = UDim2.new(0.05, 0, 0, 0)
     btn.BackgroundColor3 = Color3.fromRGB(40, 40, 40)
     btn.Text = text
     btn.TextColor3 = Color3.fromRGB(255, 255, 255)
@@ -466,8 +452,8 @@ end
 
 local function createSlider(parent, text, minVal, maxVal, defaultVal, callback)
     local container = Instance.new("Frame")
-    container.Size = UDim2.new(0.95, 0, 0, 50)
-    container.Position = UDim2.new(0.025, 0, 0, 0)
+    container.Size = UDim2.new(0.9, 0, 0, 50)
+    container.Position = UDim2.new(0.05, 0, 0, 0)
     container.BackgroundColor3 = Color3.fromRGB(40, 40, 40)
     container.BorderSizePixel = 0
     container.Parent = parent
@@ -554,8 +540,8 @@ end
 
 local function createSectionLabel(parent, text)
     local label = Instance.new("TextLabel")
-    label.Size = UDim2.new(0.95, 0, 0, 24)
-    label.Position = UDim2.new(0.025, 0, 0, 0)
+    label.Size = UDim2.new(0.9, 0, 0, 24)
+    label.Position = UDim2.new(0.05, 0, 0, 0)
     label.BackgroundTransparency = 1
     label.Text = text
     label.TextColor3 = Color3.fromRGB(180, 180, 180)
@@ -809,10 +795,10 @@ end
 
 track(RunService.RenderStepped:Connect(function()
     updateKillerESP()
-    if fovLocked then
+    if FOV_ENABLED then
         local cam = Workspace.CurrentCamera
-        if cam and cam.FieldOfView ~= currentFOV then
-            cam.FieldOfView = currentFOV
+        if cam and cam.FieldOfView ~= FOV_VALUE then
+            cam.FieldOfView = FOV_VALUE
         end
     end
 end))
@@ -951,34 +937,59 @@ minimizeBtn.MouseButton1Click:Connect(function()
 end)
 
 closeBtn.MouseButton1Click:Connect(function()
+    _G.mainFrame = nil
     screenGui:Destroy()
     for _, c in ipairs(connections) do
         pcall(function() c:Disconnect() end)
     end
+    connections = {}
+    for _, t in ipairs(loops) do
+        pcall(function() task.cancel(t) end)
+    end
+    loops = {}
 end)
 
-createToggle(espPage, "ESP Killers", function(state)
-    ESP_KILLER = state
-    updateBindLabel("espKiller", state)
-end)
-createToggle(espPage, "ESP Pallets", function(state)
-    ESP_PALLET = state
-    updateBindLabel("espPallet", state)
-end)
-createToggle(espPage, "ESP Generators", function(state)
-    ESP_GENERATOR = state
-    updateBindLabel("espGenerator", state)
-end)
-createToggle(espPage, "Show Distance", function(state)
-    ESP_DISTANCE = state
+createCollapsible(espPage, "ESP Killers", function(content)
+    createStateButton(content, "Killer ESP", function() return ESP_KILLER end, function(v)
+        ESP_KILLER = v
+        updateBindLabel("espKiller", v)
+    end)
+    createToggle(content, "Show Distance", function(state)
+        ESP_DISTANCE = state
+    end)
 end)
 
-createToggle(survivorPage, "Auto Parry", function(state)
-    AUTO_PARRY = state
-    updateBindLabel("autoParry", state)
+createCollapsible(espPage, "ESP Pallets", function(content)
+    createStateButton(content, "Pallet ESP", function() return ESP_PALLET end, function(v)
+        ESP_PALLET = v
+        updateBindLabel("espPallet", v)
+    end)
 end)
-createSlider(survivorPage, "Parry Radius", 5, 30, PARRY_RADIUS, function(val)
-    PARRY_RADIUS = val
+
+createCollapsible(espPage, "ESP Generators", function(content)
+    createStateButton(content, "Generator ESP", function() return ESP_GENERATOR end, function(v)
+        ESP_GENERATOR = v
+        updateBindLabel("espGenerator", v)
+    end)
+end)
+
+createCollapsible(visualPage, "FOV Changer", function(content)
+    createStateButton(content, "FOV Lock", function() return FOV_ENABLED end, function(v)
+        FOV_ENABLED = v
+    end)
+    createSlider(content, "FOV Value", 30, 120, FOV_VALUE, function(val)
+        FOV_VALUE = val
+    end)
+end)
+
+createCollapsible(survivorPage, "Auto Parry", function(content)
+    createStateButton(content, "Auto Parry", function() return AUTO_PARRY end, function(v)
+        AUTO_PARRY = v
+        updateBindLabel("autoParry", v)
+    end)
+    createSlider(content, "Parry Radius", 5, 30, PARRY_RADIUS, function(val)
+        PARRY_RADIUS = val
+    end)
 end)
 
 createCollapsible(movementPage, "Speed", function(content)
@@ -1000,16 +1011,21 @@ createCollapsible(movementPage, "Jump", function(content)
     end)
 end)
 
-createToggle(movementPage, "Noclip", function(state)
-    NOCLIP_ENABLED = state
-    updateBindLabel("noclip", state)
+createCollapsible(movementPage, "Noclip", function(content)
+    createStateButton(content, "Noclip", function() return NOCLIP_ENABLED end, function(v)
+        NOCLIP_ENABLED = v
+        updateBindLabel("noclip", v)
+    end)
 end)
-createToggle(movementPage, "Fly", function(state)
-    FLY_ENABLED = state
-    updateBindLabel("fly", state)
-end)
-createSlider(movementPage, "Fly Speed", 10, 200, FLY_SPEED, function(val)
-    FLY_SPEED = val
+
+createCollapsible(movementPage, "Fly", function(content)
+    createStateButton(content, "Fly", function() return FLY_ENABLED end, function(v)
+        FLY_ENABLED = v
+        updateBindLabel("fly", v)
+    end)
+    createSlider(content, "Fly Speed", 10, 200, FLY_SPEED, function(val)
+        FLY_SPEED = val
+    end)
 end)
 
 createSectionLabel(bindsPage, "Keybinds (click to rebind)")
