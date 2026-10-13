@@ -1,5 +1,7 @@
 local repo = "https://raw.githubusercontent.com/deividcomsono/Obsidian/main/"
 local Library = loadstring(game:HttpGet(repo .. "Library.lua"))()
+local ThemeManager = loadstring(game:HttpGet(repo .. "addons/ThemeManager.lua"))()
+local SaveManager = loadstring(game:HttpGet(repo .. "addons/SaveManager.lua"))()
 
 Library.Scheme.AccentColor     = Color3.fromRGB(255, 255, 255)
 Library.Scheme.BackgroundColor = Color3.fromRGB(12, 12, 12)
@@ -3666,3 +3668,14 @@ end)
 SettingBox:AddButton("Unload script", function()
 	Library:Unload()
 end)
+
+ThemeManager:SetLibrary(Library)
+SaveManager:SetLibrary(Library)
+
+SaveManager:IgnoreThemeSettings()
+SaveManager:SetIgnoreIndexes({})
+
+ThemeManager:SetFolder("BRUTALSCRIPT")
+SaveManager:SetFolder("BRUTALSCRIPT/configs")
+
+SaveManager:BuildConfigSection(Tabs.UISettings)
