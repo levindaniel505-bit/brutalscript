@@ -2,11 +2,14 @@ local Players = game:GetService("Players")
 local RunService = game:GetService("RunService")
 local Workspace = game:GetService("Workspace")
 local UserInputService = game:GetService("UserInputService")
+local Lighting = game:GetService("Lighting")
 local LocalPlayer = Players.LocalPlayer
 
 local ESP_KILLER = false
 local ESP_PALLET = false
 local ESP_GENERATOR = false
+local AUTO_PARRY = false
+local PARRY_RADIUS = 15
 
 local KILLER_COLOR = Color3.fromRGB(255, 0, 0)
 local PALLET_COLOR = Color3.fromRGB(255, 255, 255)
@@ -116,28 +119,40 @@ tabLayout.HorizontalAlignment = Enum.HorizontalAlignment.Center
 tabLayout.Parent = tabBar
 
 local espTab = Instance.new("TextButton")
-espTab.Size = UDim2.new(0.45, 0, 0, 30)
+espTab.Size = UDim2.new(0.3, 0, 0, 30)
 espTab.BackgroundColor3 = Color3.fromRGB(60, 60, 60)
 espTab.Text = "ESP"
 espTab.TextColor3 = Color3.fromRGB(255, 255, 255)
 espTab.Font = Enum.Font.GothamBold
-espTab.TextSize = 14
+espTab.TextSize = 13
 espTab.Parent = tabBar
 local espTabCorner = Instance.new("UICorner")
 espTabCorner.CornerRadius = UDim.new(0, 8)
 espTabCorner.Parent = espTab
 
 local visualTab = Instance.new("TextButton")
-visualTab.Size = UDim2.new(0.45, 0, 0, 30)
+visualTab.Size = UDim2.new(0.3, 0, 0, 30)
 visualTab.BackgroundColor3 = Color3.fromRGB(30, 30, 30)
 visualTab.Text = "Visual"
 visualTab.TextColor3 = Color3.fromRGB(255, 255, 255)
 visualTab.Font = Enum.Font.GothamBold
-visualTab.TextSize = 14
+visualTab.TextSize = 13
 visualTab.Parent = tabBar
 local visualTabCorner = Instance.new("UICorner")
 visualTabCorner.CornerRadius = UDim.new(0, 8)
 visualTabCorner.Parent = visualTab
+
+local survivorTab = Instance.new("TextButton")
+survivorTab.Size = UDim2.new(0.3, 0, 0, 30)
+survivorTab.BackgroundColor3 = Color3.fromRGB(30, 30, 30)
+survivorTab.Text = "Survivor"
+survivorTab.TextColor3 = Color3.fromRGB(255, 255, 255)
+survivorTab.Font = Enum.Font.GothamBold
+survivorTab.TextSize = 13
+survivorTab.Parent = tabBar
+local survivorTabCorner = Instance.new("UICorner")
+survivorTabCorner.CornerRadius = UDim.new(0, 8)
+survivorTabCorner.Parent = survivorTab
 
 local espPage = Instance.new("ScrollingFrame")
 espPage.Size = UDim2.new(1, -20, 1, -165)
@@ -171,84 +186,34 @@ visualLayout.Padding = UDim.new(0, 8)
 visualLayout.SortOrder = Enum.SortOrder.LayoutOrder
 visualLayout.Parent = visualPage
 
-espTab.MouseButton1Click:Connect(function()
-    espPage.Visible = true
-    visualPage.Visible = false
-    espTab.BackgroundColor3 = Color3.fromRGB(60, 60, 60)
-    visualTab.BackgroundColor3 = Color3.fromRGB(30, 30, 30)
-end)
+local survivorPage = Instance.new("ScrollingFrame")
+survivorPage.Size = UDim2.new(1, -20, 1, -165)
+survivorPage.Position = UDim2.new(0, 10, 0, 105)
+survivorPage.BackgroundTransparency = 1
+survivorPage.BorderSizePixel = 0
+survivorPage.ScrollBarThickness = 5
+survivorPage.ScrollBarImageColor3 = Color3.fromRGB(255, 255, 255)
+survivorPage.CanvasSize = UDim2.new(0, 0, 0, 500)
+survivorPage.Visible = false
+survivorPage.Parent = mainFrame
 
-visualTab.MouseButton1Click:Connect(function()
-    espPage.Visible = false
-    visualPage.Visible = true
-    espTab.BackgroundColor3 = Color3.fromRGB(30, 30, 30)
-    visualTab.BackgroundColor3 = Color3.fromRGB(60, 60, 60)
-end)
+local survivorLayout = Instance.new("UIListLayout")
+survivorLayout.Padding = UDim.new(0, 8)
+survivorLayout.SortOrder = Enum.SortOrder.LayoutOrder
+survivorLayout.Parent = survivorPage
 
-local aspectBars = Instance.new("ScreenGui")
-aspectBars.Name = "AspectBars"
-aspectBars.ResetOnSpawn = false
-aspectBars.IgnoreGuiInset = true
-aspectBars.DisplayOrder = 999
-aspectBars.Parent = game.CoreGui
-
-local leftBar = Instance.new("Frame")
-leftBar.BackgroundColor3 = Color3.fromRGB(0, 0, 0)
-leftBar.BorderSizePixel = 0
-leftBar.Size = UDim2.new(0, 0, 1, 0)
-leftBar.Position = UDim2.new(0, 0, 0, 0)
-leftBar.Parent = aspectBars
-
-local rightBar = Instance.new("Frame")
-rightBar.BackgroundColor3 = Color3.fromRGB(0, 0, 0)
-rightBar.BorderSizePixel = 0
-rightBar.Size = UDim2.new(0, 0, 1, 0)
-rightBar.Position = UDim2.new(1, 0, 0, 0)
-rightBar.Parent = aspectBars
-
-local topBar43 = Instance.new("Frame")
-topBar43.BackgroundColor3 = Color3.fromRGB(0, 0, 0)
-topBar43.BorderSizePixel = 0
-topBar43.Size = UDim2.new(1, 0, 0, 0)
-topBar43.Position = UDim2.new(0, 0, 0, 0)
-topBar43.Parent = aspectBars
-
-local bottomBar43 = Instance.new("Frame")
-bottomBar43.BackgroundColor3 = Color3.fromRGB(0, 0, 0)
-bottomBar43.BorderSizePixel = 0
-bottomBar43.Size = UDim2.new(1, 0, 0, 0)
-bottomBar43.Position = UDim2.new(0, 1, 0, 0)
-bottomBar43.Parent = aspectBars
-
-local function clearBars()
-    leftBar.Size = UDim2.new(0, 0, 1, 0)
-    rightBar.Size = UDim2.new(0, 0, 1, 0)
-    topBar43.Size = UDim2.new(1, 0, 0, 0)
-    bottomBar43.Size = UDim2.new(1, 0, 0, 0)
-    bottomBar43.Position = UDim2.new(0, 1, 0, 0)
+local function switchTab(tabName)
+    espPage.Visible = (tabName == "esp")
+    visualPage.Visible = (tabName == "visual")
+    survivorPage.Visible = (tabName == "survivor")
+    espTab.BackgroundColor3 = (tabName == "esp") and Color3.fromRGB(60, 60, 60) or Color3.fromRGB(30, 30, 30)
+    visualTab.BackgroundColor3 = (tabName == "visual") and Color3.fromRGB(60, 60, 60) or Color3.fromRGB(30, 30, 30)
+    survivorTab.BackgroundColor3 = (tabName == "survivor") and Color3.fromRGB(60, 60, 60) or Color3.fromRGB(30, 30, 30)
 end
 
-local function applyBars(mode)
-    clearBars()
-    local cam = Workspace.CurrentCamera
-    local vp = cam.ViewportSize
-    if mode == "4:3" then
-        local targetWidth = vp.Y * (4 / 3)
-        local barSize = (vp.X - targetWidth) / 2
-        if barSize > 0 then
-            leftBar.Size = UDim2.new(0, barSize, 1, 0)
-            rightBar.Size = UDim2.new(0, barSize, 1, 0)
-        end
-    elseif mode == "21:9" then
-        local targetHeight = vp.X * (9 / 21)
-        local barSize = (vp.Y - targetHeight) / 2
-        if barSize > 0 then
-            topBar43.Size = UDim2.new(1, 0, 0, barSize)
-            bottomBar43.Size = UDim2.new(1, 0, 0, barSize)
-            bottomBar43.Position = UDim2.new(0, 1, 0, -barSize)
-        end
-    end
-end
+espTab.MouseButton1Click:Connect(function() switchTab("esp") end)
+visualTab.MouseButton1Click:Connect(function() switchTab("visual") end)
+survivorTab.MouseButton1Click:Connect(function() switchTab("survivor") end)
 
 local function createToggle(parent, text, callback)
     local btn = Instance.new("TextButton")
@@ -719,6 +684,29 @@ local function updateGeneratorESP()
     end
 end
 
+local function getKillerCharacter()
+    for _, plr in ipairs(Players:GetPlayers()) do
+        if plr == LocalPlayer then continue end
+        local char = plr.Character
+        local hum = char and char:FindFirstChildOfClass("Humanoid")
+        if char and hum and hum.Health > 0 and isKiller(plr) then
+            return char
+        end
+    end
+    return nil
+end
+
+local function getDistanceToKiller()
+    local myChar = LocalPlayer.Character
+    local myRoot = myChar and myChar:FindFirstChild("HumanoidRootPart")
+    local killerChar = getKillerCharacter()
+    local killerRoot = killerChar and killerChar:FindFirstChild("HumanoidRootPart")
+    if myRoot and killerRoot then
+        return (myRoot.Position - killerRoot.Position).Magnitude
+    end
+    return nil
+end
+
 track(RunService.RenderStepped:Connect(function()
     updateKillerESP()
     if fovLocked then
@@ -736,27 +724,25 @@ table.insert(loops, task.spawn(function()
     end
 end))
 
+table.insert(loops, task.spawn(function()
+    while task.wait(0.1) do
+        if AUTO_PARRY then
+            local dist = getDistanceToKiller()
+            if dist and dist <= PARRY_RADIUS then
+                pcall(function()
+                    local vim = game:GetService("VirtualInputManager")
+                    vim:SendKeyEvent(true, Enum.KeyCode.Q, false, game)
+                    task.wait(0.05)
+                    vim:SendKeyEvent(false, Enum.KeyCode.Q, false, game)
+                end)
+            end
+        end
+    end
+end))
+
 createExpandableESP(espPage, "ESP Убийцы", "Включить", function(v) ESP_KILLER = v end, "Цвет", function(c) KILLER_COLOR = c end)
 createExpandableESP(espPage, "ESP Палеток", "Включить", function(v) ESP_PALLET = v end, "Цвет", function(c) PALLET_COLOR = c end)
 createExpandableESP(espPage, "ESP Генераторов", "Включить", function(v) ESP_GENERATOR = v end, "Цвет", function(c) GENERATOR_COLOR = c end)
-
-createSectionLabel(visualPage, "РАЗРЕШЕНИЯ")
-
-createButton(visualPage, "Default (16:9)", function()
-    applyBars("default")
-end)
-
-createButton(visualPage, "4:3 (полосы по бокам)", function()
-    applyBars("4:3")
-end)
-
-createButton(visualPage, "Full HD (1920x1080)", function()
-    applyBars("fullhd")
-end)
-
-createButton(visualPage, "Широкий (21:9, полосы сверху/снизу)", function()
-    applyBars("21:9")
-end)
 
 createSectionLabel(visualPage, "НАСТРОЙКИ FOV")
 
@@ -769,6 +755,16 @@ createToggle(visualPage, "Зафиксировать FOV", function(v)
     fovLocked = v
 end)
 
+createSectionLabel(survivorPage, "AUTO PARRY")
+
+createToggle(survivorPage, "Auto Parry (радиус " .. PARRY_RADIUS .. ")", function(v)
+    AUTO_PARRY = v
+end)
+
+createDropdownSlider(survivorPage, "Радиус Parry", 5, 30, PARRY_RADIUS, function(v)
+    PARRY_RADIUS = v
+end)
+
 closeBtn.MouseButton1Click:Connect(function()
     for _, conn in ipairs(connections) do
         pcall(function() conn:Disconnect() end)
@@ -779,7 +775,6 @@ closeBtn.MouseButton1Click:Connect(function()
     clearKillerESP()
     clearPalletESP()
     clearGeneratorESP()
-    aspectBars:Destroy()
     Workspace.CurrentCamera.FieldOfView = 70
     screenGui:Destroy()
     print("[Brutal Script] unloaded")
