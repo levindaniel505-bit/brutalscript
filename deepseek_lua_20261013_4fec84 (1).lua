@@ -17,8 +17,6 @@ local killerESP = {}
 local palletESP = {}
 local generatorESP = {}
 
-local toggleStates = {}
-
 local screenGui = Instance.new("ScreenGui")
 screenGui.Name = "BrutalScriptMenu"
 screenGui.ResetOnSpawn = false
@@ -52,13 +50,6 @@ topBar.Parent = mainFrame
 local topCorner = Instance.new("UICorner")
 topCorner.CornerRadius = UDim.new(0, 14)
 topCorner.Parent = topBar
-
-local topCover = Instance.new("Frame")
-topCover.Size = UDim2.new(1, 0, 0, 25)
-topCover.Position = UDim2.new(0, 0, 0, 25)
-topCover.BackgroundColor3 = Color3.fromRGB(25, 25, 25)
-topCover.BorderSizePixel = 0
-topCover.Parent = topBar
 
 local title = Instance.new("TextLabel")
 title.Size = UDim2.new(1, -90, 1, 0)
@@ -101,7 +92,7 @@ local openBtn = Instance.new("TextButton")
 openBtn.Size = UDim2.new(0, 50, 0, 50)
 openBtn.Position = UDim2.new(0, 15, 0.5, -25)
 openBtn.BackgroundColor3 = Color3.fromRGB(15, 15, 15)
-openBtn.Text = "B"
+openBtn.Text = "+"
 openBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
 openBtn.Font = Enum.Font.GothamBlack
 openBtn.TextSize = 22
@@ -167,11 +158,11 @@ local function createToggle(id, text, callback)
     s.Thickness = 1
     s.Parent = btn
 
-    toggleStates[id] = false
+    local state = false
 
     btn.MouseButton1Click:Connect(function()
-        toggleStates[id] = not toggleStates[id]
-        if toggleStates[id] then
+        state = not state
+        if state then
             btn.Text = text .. "   [ON]"
             btn.BackgroundColor3 = Color3.fromRGB(50, 50, 50)
             s.Color = Color3.fromRGB(255, 255, 255)
@@ -180,7 +171,7 @@ local function createToggle(id, text, callback)
             btn.BackgroundColor3 = Color3.fromRGB(30, 30, 30)
             s.Color = Color3.fromRGB(80, 80, 80)
         end
-        callback(toggleStates[id])
+        callback(state)
     end)
 end
 
@@ -252,6 +243,43 @@ local function createNameTag(adornee, text, color, size)
     return bg, label
 end
 
+local function isKiller(plr)
+    local char = plr.Character
+    if not char then return false end
+    local hum = char:FindFirstChildOfClass("Humanoid")
+    if not hum then return false end
+    if hum.MaxHealth > 500 then return true end
+    if plr.Team and plr.Team.Name:lower():find("killer") then return true end
+    if plr:GetAttribute("Role") == "Killer" then return true end
+    return false
+end
+
+local function isPallet(obj)
+    if not obj:IsA("Model") and not obj:IsA("BasePart") then return false end
+    local n = obj.Name:lower()
+    if not (n:find("pallet") or n:find("palka") or n:find("паллет")) then return false end
+    if obj:IsA("Model") and not obj.PrimaryPart then
+        for _, child in ipairs(obj:GetChildren()) do
+            if child:IsA("BasePart") then return true end
+        end
+        return false
+    end
+    return true
+end
+
+local function isGenerator(obj)
+    if not obj:IsA("Model") and not obj:IsA("BasePart") then return false end
+    local n = obj.Name:lower()
+    if not (n:find("generator") or n:find("generat") or n:find("генератор")) then return false end
+    if obj:IsA("Model") and not obj.PrimaryPart then
+        for _, child in ipairs(obj:GetChildren()) do
+            if child:IsA("BasePart") then return true end
+        end
+        return false
+    end
+    return true
+end
+
 local function clearKillerESP()
     for plr, esp in pairs(killerESP) do
         if esp.h then esp.h:Destroy() end
@@ -272,45 +300,6 @@ local function clearGeneratorESP()
         if esp.h then esp.h:Destroy() end
         generatorESP[obj] = nil
     end
-end
-
-local function isKiller(plr)
-    local char = plr.Character
-    if not char then return false end
-    local hum = char:FindFirstChildOfClass("Humanoid")
-    if not hum then return false end
-    if hum.MaxHealth > 500 then return true end
-    if plr.Team and plr.Team.Name:lower():find("killer") then return true end
-    if plr:GetAttribute("Role") == "Killer" then return true end
-    return false
-end
-
-local function isPallet(obj)
-    if not obj:IsA("Model") and not obj:IsA("BasePart") then return false end
-    local n = obj.Name:lower()
-    if not (n:find("pallet") or n:find("palka") or n:find("паллет")) then return false end
-    if obj:IsA("Model") and not obj.PrimaryPart then
-        local hasPart = false
-        for _, child in ipairs(obj:GetChildren()) do
-            if child:IsA("BasePart") then hasPart = true break end
-        end
-        if not hasPart then return false end
-    end
-    return true
-end
-
-local function isGenerator(obj)
-    if not obj:IsA("Model") and not obj:IsA("BasePart") then return false end
-    local n = obj.Name:lower()
-    if not (n:find("generator") or n:find("generat") or n:find("генератор")) then return false end
-    if obj:IsA("Model") and not obj.PrimaryPart then
-        local hasPart = false
-        for _, child in ipairs(obj:GetChildren()) do
-            if child:IsA("BasePart") then hasPart = true break end
-        end
-        if not hasPart then return false end
-    end
-    return true
 end
 
 local function updateKillerESP()
