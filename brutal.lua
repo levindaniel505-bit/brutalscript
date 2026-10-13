@@ -3,7 +3,6 @@ local RunService = game:GetService("RunService")
 local Workspace = game:GetService("Workspace")
 local UserInputService = game:GetService("UserInputService")
 local VirtualInputManager = game:GetService("VirtualInputManager")
-local Lighting = game:GetService("Lighting")
 local LocalPlayer = Players.LocalPlayer
 
 local ESP_KILLER = false
@@ -12,7 +11,7 @@ local ESP_GENERATOR = false
 local AUTO_PARRY = false
 local PARRY_RADIUS = 15
 local PARRY_KEY = Enum.KeyCode.Q
-local PARRY_COOLDOWN = 0.5
+local PARRY_COOLDOWN = 1
 local lastParry = 0
 
 local ESP_DISTANCE = true
@@ -741,27 +740,45 @@ local function updateGeneratorESP()
     end
 end
 
-local function getKillerCharacter()
+local function getKillerAttacking()
     for _, plr in ipairs(Players:GetPlayers()) do
         if plr == LocalPlayer then continue end
         local char = plr.Character
-        local hum = char and char:FindFirstChildOfClass("Humanoid")
-        if char and hum and hum.Health > 0 and isKiller(plr) then
-            return char
+        if not char then continue end
+        local hum = char:FindFirstChildOfClass("Humanoid")
+        if not hum or hum.Health <= 0 then continue end
+
+        local isKillerRole = hum.MaxHealth > 500
+            or (plr.Team and plr.Team.Name:lower():find("killer"))
+            or plr:GetAttribute("Role") == "Killer"
+
+        if not isKillerRole then continue end
+
+        local myRoot = LocalPlayer.Character
+            and LocalPlayer.Character:FindFirstChild("HumanoidRootPart")
+        local killerRoot = char:FindFirstChild("HumanoidRootPart")
+
+        if myRoot and killerRoot then
+            local dist = (myRoot.Position - killerRoot.Position).Magnitude
+            if dist <= PARRY_RADIUS then
+                local state = hum:GetState()
+                if state == Enum.HumanoidStateType.Attacking
+                    or state == Enum.HumanoidStateType.Lunge
+                    or state == Enum.HumanoidStateType.Physics then
+                    return true
+                end
+                for _, track in ipairs(hum:GetPlayingAnimationTracks()) do
+                    local animName = track.Animation.Name:lower()
+                    if animName:find("attack")
+                        or animName:find("swing")
+                        or animName:find("lunge") then
+                        return true
+                    end
+                end
+            end
         end
     end
-    return nil
-end
-
-local function getDistanceToKiller()
-    local myChar = LocalPlayer.Character
-    local myRoot = myChar and myChar:FindFirstChild("HumanoidRootPart")
-    local killerChar = getKillerCharacter()
-    local killerRoot = killerChar and killerChar:FindFirstChild("HumanoidRootPart")
-    if myRoot and killerRoot then
-        return (myRoot.Position - killerRoot.Position).Magnitude
-    end
-    return nil
+    return false
 end
 
 track(RunService.RenderStepped:Connect(function()
@@ -782,19 +799,17 @@ table.insert(loops, task.spawn(function()
 end))
 
 table.insert(loops, task.spawn(function()
-    while task.wait(0.1) do
-        if AUTO_PARRY then
-            local dist = getDistanceToKiller()
-            if dist and dist <= PARRY_RADIUS then
-                if tick() - lastParry >= PARRY_COOLDOWN then
-                    lastParry = tick()
-                    pcall(function()
-                        VirtualInputManager:SendKeyEvent(true, PARRY_KEY, false, game)
-                        task.wait(0.05)
-                        VirtualInputManager:SendKeyEvent(false, PARRY_KEY, false, game)
-                    end)
-                end
-            end
+    while task.wait(0.05) do
+        if not AUTO_PARRY then continue end
+        if tick() - lastParry < PARRY_COOLDOWN then continue end
+
+        if getKillerAttacking() then
+            lastParry = tick()
+            pcall(function()
+                VirtualInputManager:SendKeyEvent(true, PARRY_KEY, false, game)
+                task.wait(0.03)
+                VirtualInputManager:SendKeyEvent(false, PARRY_KEY, false, game)
+            end)
         end
     end
 end))
@@ -853,7 +868,6 @@ local function stopFly()
     if flyBodyGyro then flyBodyGyro:Destroy() flyBodyGyro = nil end
 end
 
-local flyConn
 local function updateFly()
     if not FLY_ENABLED then return end
     local char = LocalPlayer.Character
@@ -875,8 +889,7 @@ local function updateFly()
     flyBodyGyro.CFrame = cam.CFrame
 end
 
-flyConn = RunService.RenderStepped:Connect(updateFly)
-track(flyConn)
+track(RunService.RenderStepped:Connect(updateFly))
 
 table.insert(loops, task.spawn(function()
     while task.wait(0.1) do
