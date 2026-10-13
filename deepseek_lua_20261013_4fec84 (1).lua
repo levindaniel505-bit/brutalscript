@@ -1,13 +1,11 @@
 local Players = game:GetService("Players")
 local RunService = game:GetService("RunService")
 local Workspace = game:GetService("Workspace")
-local UserInputService = game:GetService("UserInputService")
 local LocalPlayer = Players.LocalPlayer
 
 local ESP_KILLER = false
 local ESP_PALLET = false
 local ESP_GENERATOR = false
-local FLY_ENABLED = false
 
 local KILLER_COLOR = Color3.fromRGB(255, 0, 0)
 local PALLET_COLOR = Color3.fromRGB(255, 255, 255)
@@ -23,8 +21,8 @@ screenGui.ResetOnSpawn = false
 screenGui.Parent = game.CoreGui
 
 local mainFrame = Instance.new("Frame")
-mainFrame.Size = UDim2.new(0, 360, 0, 520)
-mainFrame.Position = UDim2.new(0, 30, 0.5, -260)
+mainFrame.Size = UDim2.new(0, 380, 0, 540)
+mainFrame.Position = UDim2.new(0, 30, 0.5, -270)
 mainFrame.BackgroundColor3 = Color3.fromRGB(15, 15, 15)
 mainFrame.BorderSizePixel = 0
 mainFrame.Active = true
@@ -125,22 +123,94 @@ openBtn.MouseButton1Click:Connect(function()
     openBtn.Visible = false
 end)
 
-local scroll = Instance.new("ScrollingFrame")
-scroll.Size = UDim2.new(1, -20, 1, -70)
-scroll.Position = UDim2.new(0, 10, 0, 60)
-scroll.BackgroundTransparency = 1
-scroll.BorderSizePixel = 0
-scroll.ScrollBarThickness = 5
-scroll.ScrollBarImageColor3 = Color3.fromRGB(255, 255, 255)
-scroll.CanvasSize = UDim2.new(0, 0, 0, 600)
-scroll.Parent = mainFrame
+local tabBar = Instance.new("Frame")
+tabBar.Size = UDim2.new(1, -20, 0, 40)
+tabBar.Position = UDim2.new(0, 10, 0, 55)
+tabBar.BackgroundColor3 = Color3.fromRGB(25, 25, 25)
+tabBar.BorderSizePixel = 0
+tabBar.Parent = mainFrame
+local tabCorner = Instance.new("UICorner")
+tabCorner.CornerRadius = UDim.new(0, 10)
+tabCorner.Parent = tabBar
 
-local listLayout = Instance.new("UIListLayout")
-listLayout.Padding = UDim.new(0, 8)
-listLayout.SortOrder = Enum.SortOrder.LayoutOrder
-listLayout.Parent = scroll
+local tabLayout = Instance.new("UIListLayout")
+tabLayout.FillDirection = Enum.FillDirection.Horizontal
+tabLayout.Padding = UDim.new(0, 5)
+tabLayout.VerticalAlignment = Enum.VerticalAlignment.Center
+tabLayout.HorizontalAlignment = Enum.HorizontalAlignment.Center
+tabLayout.Parent = tabBar
 
-local function createToggle(id, text, callback)
+local espTab = Instance.new("TextButton")
+espTab.Size = UDim2.new(0.45, 0, 0, 30)
+espTab.BackgroundColor3 = Color3.fromRGB(60, 60, 60)
+espTab.Text = "ESP"
+espTab.TextColor3 = Color3.fromRGB(255, 255, 255)
+espTab.Font = Enum.Font.GothamBold
+espTab.TextSize = 14
+espTab.Parent = tabBar
+local espTabCorner = Instance.new("UICorner")
+espTabCorner.CornerRadius = UDim.new(0, 8)
+espTabCorner.Parent = espTab
+
+local visualTab = Instance.new("TextButton")
+visualTab.Size = UDim2.new(0.45, 0, 0, 30)
+visualTab.BackgroundColor3 = Color3.fromRGB(30, 30, 30)
+visualTab.Text = "Visual"
+visualTab.TextColor3 = Color3.fromRGB(255, 255, 255)
+visualTab.Font = Enum.Font.GothamBold
+visualTab.TextSize = 14
+visualTab.Parent = tabBar
+local visualTabCorner = Instance.new("UICorner")
+visualTabCorner.CornerRadius = UDim.new(0, 8)
+visualTabCorner.Parent = visualTab
+
+local espPage = Instance.new("ScrollingFrame")
+espPage.Size = UDim2.new(1, -20, 1, -165)
+espPage.Position = UDim2.new(0, 10, 0, 105)
+espPage.BackgroundTransparency = 1
+espPage.BorderSizePixel = 0
+espPage.ScrollBarThickness = 5
+espPage.ScrollBarImageColor3 = Color3.fromRGB(255, 255, 255)
+espPage.CanvasSize = UDim2.new(0, 0, 0, 500)
+espPage.Visible = true
+espPage.Parent = mainFrame
+
+local espLayout = Instance.new("UIListLayout")
+espLayout.Padding = UDim.new(0, 8)
+espLayout.SortOrder = Enum.SortOrder.LayoutOrder
+espLayout.Parent = espPage
+
+local visualPage = Instance.new("ScrollingFrame")
+visualPage.Size = UDim2.new(1, -20, 1, -165)
+visualPage.Position = UDim2.new(0, 10, 0, 105)
+visualPage.BackgroundTransparency = 1
+visualPage.BorderSizePixel = 0
+visualPage.ScrollBarThickness = 5
+visualPage.ScrollBarImageColor3 = Color3.fromRGB(255, 255, 255)
+visualPage.CanvasSize = UDim2.new(0, 0, 0, 500)
+visualPage.Visible = false
+visualPage.Parent = mainFrame
+
+local visualLayout = Instance.new("UIListLayout")
+visualLayout.Padding = UDim.new(0, 8)
+visualLayout.SortOrder = Enum.SortOrder.LayoutOrder
+visualLayout.Parent = visualPage
+
+espTab.MouseButton1Click:Connect(function()
+    espPage.Visible = true
+    visualPage.Visible = false
+    espTab.BackgroundColor3 = Color3.fromRGB(60, 60, 60)
+    visualTab.BackgroundColor3 = Color3.fromRGB(30, 30, 30)
+end)
+
+visualTab.MouseButton1Click:Connect(function()
+    espPage.Visible = false
+    visualPage.Visible = true
+    espTab.BackgroundColor3 = Color3.fromRGB(30, 30, 30)
+    visualTab.BackgroundColor3 = Color3.fromRGB(60, 60, 60)
+end)
+
+local function createToggle(parent, text, callback)
     local btn = Instance.new("TextButton")
     btn.Size = UDim2.new(0.95, 0, 0, 40)
     btn.Position = UDim2.new(0.025, 0, 0, 0)
@@ -149,7 +219,7 @@ local function createToggle(id, text, callback)
     btn.TextColor3 = Color3.fromRGB(255, 255, 255)
     btn.Font = Enum.Font.GothamBold
     btn.TextSize = 14
-    btn.Parent = scroll
+    btn.Parent = parent
     local c = Instance.new("UICorner")
     c.CornerRadius = UDim.new(0, 10)
     c.Parent = btn
@@ -175,7 +245,7 @@ local function createToggle(id, text, callback)
     end)
 end
 
-local function createColorButton(text, callback)
+local function createColorButton(parent, text, callback)
     local btn = Instance.new("TextButton")
     btn.Size = UDim2.new(0.95, 0, 0, 32)
     btn.Position = UDim2.new(0.025, 0, 0, 0)
@@ -184,7 +254,7 @@ local function createColorButton(text, callback)
     btn.TextColor3 = Color3.fromRGB(255, 255, 255)
     btn.Font = Enum.Font.Gotham
     btn.TextSize = 13
-    btn.Parent = scroll
+    btn.Parent = parent
     local c = Instance.new("UICorner")
     c.CornerRadius = UDim.new(0, 10)
     c.Parent = btn
@@ -347,6 +417,9 @@ local function updatePalletESP()
         if not obj.Parent then
             esp.h:Destroy()
             palletESP[obj] = nil
+        else
+            esp.h.FillColor = PALLET_COLOR
+            esp.h.OutlineColor = PALLET_COLOR
         end
     end
     for _, obj in ipairs(Workspace:GetDescendants()) do
@@ -366,6 +439,9 @@ local function updateGeneratorESP()
         if not obj.Parent then
             esp.h:Destroy()
             generatorESP[obj] = nil
+        else
+            esp.h.FillColor = GENERATOR_COLOR
+            esp.h.OutlineColor = GENERATOR_COLOR
         end
     end
     for _, obj in ipairs(Workspace:GetDescendants()) do
@@ -376,44 +452,7 @@ local function updateGeneratorESP()
     end
 end
 
-local flyBV, flyBG
-local function toggleFly(state)
-    FLY_ENABLED = state
-    local char = LocalPlayer.Character
-    if not char then return end
-    local root = char:FindFirstChild("HumanoidRootPart")
-    if not root then return end
-
-    if state then
-        flyBV = Instance.new("BodyVelocity")
-        flyBV.MaxForce = Vector3.new(1e5, 1e5, 1e5)
-        flyBV.Velocity = Vector3.new(0, 0, 0)
-        flyBV.Parent = root
-        flyBG = Instance.new("BodyGyro")
-        flyBG.MaxTorque = Vector3.new(1e5, 1e5, 1e5)
-        flyBG.P = 1000
-        flyBG.D = 50
-        flyBG.Parent = root
-    else
-        if flyBV then flyBV:Destroy() flyBV = nil end
-        if flyBG then flyBG:Destroy() flyBG = nil end
-    end
-end
-
 RunService.RenderStepped:Connect(function()
-    if FLY_ENABLED and flyBV and flyBG then
-        local cam = Workspace.CurrentCamera
-        local move = Vector3.new(0, 0, 0)
-        if UserInputService:IsKeyDown(Enum.KeyCode.W) then move = move + cam.CFrame.LookVector end
-        if UserInputService:IsKeyDown(Enum.KeyCode.S) then move = move - cam.CFrame.LookVector end
-        if UserInputService:IsKeyDown(Enum.KeyCode.A) then move = move - cam.CFrame.RightVector end
-        if UserInputService:IsKeyDown(Enum.KeyCode.D) then move = move + cam.CFrame.RightVector end
-        if UserInputService:IsKeyDown(Enum.KeyCode.Space) then move = move + Vector3.new(0, 1, 0) end
-        if UserInputService:IsKeyDown(Enum.KeyCode.LeftControl) then move = move - Vector3.new(0, 1, 0) end
-        if move.Magnitude > 0 then move = move.Unit * 60 end
-        flyBV.Velocity = move
-        flyBG.CFrame = cam.CFrame
-    end
     updateKillerESP()
 end)
 
@@ -424,15 +463,27 @@ task.spawn(function()
     end
 end)
 
-createToggle("killer", "ESP Убийцы", function(v) ESP_KILLER = v end)
-createColorButton("Цвет Убийцы", function(c) KILLER_COLOR = c end)
+createToggle(espPage, "ESP Убийцы", function(v) ESP_KILLER = v end)
+createColorButton(espPage, "Цвет Убийцы", function(c) KILLER_COLOR = c end)
 
-createToggle("pallet", "ESP Палеток", function(v) ESP_PALLET = v end)
-createColorButton("Цвет Палеток", function(c) PALLET_COLOR = c end)
+createToggle(espPage, "ESP Палеток", function(v) ESP_PALLET = v end)
+createColorButton(espPage, "Цвет Палеток", function(c) PALLET_COLOR = c end)
 
-createToggle("generator", "ESP Генераторов", function(v) ESP_GENERATOR = v end)
-createColorButton("Цвет Генераторов", function(c) GENERATOR_COLOR = c end)
+createToggle(espPage, "ESP Генераторов", function(v) ESP_GENERATOR = v end)
+createColorButton(espPage, "Цвет Генераторов", function(c) GENERATOR_COLOR = c end)
 
-createToggle("fly", "Fly (WASD + Space/Ctrl)", function(v) toggleFly(v) end)
+local res43 = false
+local originalFOV = 70
+
+createToggle(visualPage, "Разрешение 4:3 (FOV)", function(v)
+    res43 = v
+    local cam = Workspace.CurrentCamera
+    if v then
+        originalFOV = cam.FieldOfView
+        cam.FieldOfView = 90
+    else
+        cam.FieldOfView = originalFOV
+    end
+end)
 
 print("[Brutal Script] loaded")
