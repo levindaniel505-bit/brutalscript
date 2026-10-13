@@ -26,9 +26,14 @@ local MOONWALK_ENABLED = false
 local MOONWALK_SPEED = 16
 local MOONWALK_SIDE_INTERVAL = 1
 local MOONWALK_TURN_SPEED = 6
+local MOONWALK_ANGLE_STEP = 20
 local moonwalkLastSide = 0
 local moonwalkSide = -1
+local moonwalkTargetAngle = 0
 local moonwalkCurrentAngle = 0
+
+local NO_FALL_ENABLED = false
+local NO_SLOWED_ENABLED = false
 
 local FOV_ENABLED = false
 local FOV_VALUE = 70
@@ -858,6 +863,28 @@ table.insert(loops, task.spawn(function()
     end
 end))
 
+table.insert(loops, task.spawn(function()
+    while task.wait(0.2) do
+        if NO_FALL_ENABLED then
+            local char = LocalPlayer.Character
+            local hum = char and char:FindFirstChildOfClass("Humanoid")
+            if hum then
+                hum:SetStateEnabled(Enum.HumanoidStateType.FallingDown, false)
+                hum:SetStateEnabled(Enum.HumanoidStateType.Landed, false)
+            end
+        end
+        if NO_SLOWED_ENABLED then
+            local char = LocalPlayer.Character
+            local hum = char and char:FindFirstChildOfClass("Humanoid")
+            if hum and not SPEED_ENABLED then
+                if hum.WalkSpeed < 16 then
+                    hum.WalkSpeed = 16
+                end
+            end
+        end
+    end
+end))
+
 track(RunService.Stepped:Connect(function(_, dt)
     local char = LocalPlayer.Character
     local hum = char and char:FindFirstChildOfClass("Humanoid")
@@ -874,6 +901,17 @@ track(RunService.Stepped:Connect(function(_, dt)
             hum.JumpPower = JUMP_VALUE
         else
             hum.JumpPower = 50
+        end
+    end
+
+    if NO_FALL_ENABLED and hum then
+        hum:SetStateEnabled(Enum.HumanoidStateType.FallingDown, false)
+        hum:SetStateEnabled(Enum.HumanoidStateType.Landed, false)
+    end
+
+    if NO_SLOWED_ENABLED and hum and not SPEED_ENABLED then
+        if hum.WalkSpeed < 16 then
+            hum.WalkSpeed = 16
         end
     end
 
@@ -928,10 +966,8 @@ track(RunService.Stepped:Connect(function(_, dt)
 
     if MOONWALK_ENABLED and hum and root then
         local moveDir = hum.MoveDirection
-        local wDown = UserInputService:IsKeyDown(Enum.KeyCode.W)
-        local sDown = UserInputService:IsKeyDown(Enum.KeyCode.S)
 
-        if moveDir.Magnitude > 0 and (wDown or sDown) then
+        if moveDir.Magnitude > 0 then
             hum.AutoRotate = false
             local moveVec = Vector3.new(moveDir.X, 0, moveDir.Z).Unit
 
@@ -958,10 +994,10 @@ track(RunService.Stepped:Connect(function(_, dt)
             if now - moonwalkLastSide >= MOONWALK_SIDE_INTERVAL then
                 moonwalkLastSide = now
                 moonwalkSide = -moonwalkSide
+                moonwalkTargetAngle = moonwalkTargetAngle + MOONWALK_ANGLE_STEP * moonwalkSide
             end
 
-            local targetAngle = 30 * moonwalkSide
-            moonwalkCurrentAngle = moonwalkCurrentAngle + (targetAngle - moonwalkCurrentAngle) * math.min(MOONWALK_TURN_SPEED * dt, 1)
+            moonwalkCurrentAngle = moonwalkCurrentAngle + (moonwalkTargetAngle - moonwalkCurrentAngle) * math.min(MOONWALK_TURN_SPEED * dt, 1)
 
             local baseDir = -moveVec
             local angleRad = math.rad(moonwalkCurrentAngle)
@@ -973,13 +1009,11 @@ track(RunService.Stepped:Connect(function(_, dt)
             moonwalkAlign.CFrame = CFrame.lookAt(root.Position, root.Position + rotated)
         else
             hum.AutoRotate = true
-            moonwalkCurrentAngle = 0
             if moonwalkVel then moonwalkVel:Destroy() moonwalkVel = nil end
             if moonwalkAlign then moonwalkAlign:Destroy() moonwalkAlign = nil end
         end
     else
         if hum then hum.AutoRotate = true end
-        moonwalkCurrentAngle = 0
         if moonwalkVel then moonwalkVel:Destroy() moonwalkVel = nil end
         if moonwalkAlign then moonwalkAlign:Destroy() moonwalkAlign = nil end
     end
@@ -1077,6 +1111,18 @@ createCollapsible(survivorPage, "Auto Parry", function(content)
     end)
     createSlider(content, "Parry Radius", 5, 30, PARRY_RADIUS, function(val)
         PARRY_RADIUS = val
+    end)
+end)
+
+createCollapsible(survivorPage, "No Fall", function(content)
+    createStateButton(content, "No Fall", function() return NO_FALL_ENABLED end, function(v)
+        NO_FALL_ENABLED = v
+    end)
+end)
+
+createCollapsible(survivorPage, "No Slowed", function(content)
+    createStateButton(content, "No Slowed", function() return NO_SLOWED_ENABLED end, function(v)
+        NO_SLOWED_ENABLED = v
     end)
 end)
 
