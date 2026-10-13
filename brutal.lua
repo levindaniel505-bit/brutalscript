@@ -9,6 +9,248 @@ Library.Scheme.MainColor       = Color3.fromRGB(35, 35, 35)
 Library.Scheme.OutlineColor    = Color3.fromRGB(255, 255, 255)
 Library.Scheme.FontColor       = Color3.fromRGB(240, 240, 240)
 
+-- ================= LOADING + KEY SYSTEM =================
+
+local VALID_KEYS = {
+    ["BRUTAL-FREE-0001"] = true,
+    ["BRUTAL-7D-0002"]   = true,
+    ["BRUTAL-30D-0003"]  = true,
+    ["BRUTAL-VIP-0004"]  = true,
+    ["BRUTAL-TEST-0005"] = true,
+}
+
+local KeyVerified = false
+
+local function ShowLoadingScreen()
+    local gui = Instance.new("ScreenGui")
+    gui.Name = "BrutalLoading"
+    gui.ResetOnSpawn = false
+    gui.IgnoreGuiInset = true
+    gui.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
+    gui.Parent = game:GetService("CoreGui")
+
+    local bg = Instance.new("Frame")
+    bg.Size = UDim2.new(1, 0, 1, 0)
+    bg.BackgroundColor3 = Color3.fromRGB(10, 10, 10)
+    bg.BorderSizePixel = 0
+    bg.Parent = gui
+
+    local title = Instance.new("TextLabel")
+    title.Size = UDim2.new(1, 0, 0, 60)
+    title.Position = UDim2.new(0, 0, 0.5, -60)
+    title.BackgroundTransparency = 1
+    title.Text = "BRUTALSCRIPT"
+    title.TextColor3 = Color3.fromRGB(255, 255, 255)
+    title.Font = Enum.Font.GothamBlack
+    title.TextSize = 42
+    title.TextStrokeTransparency = 0
+    title.TextStrokeColor3 = Color3.fromRGB(120, 20, 20)
+    title.Parent = bg
+
+    local version = Instance.new("TextLabel")
+    version.Size = UDim2.new(1, 0, 0, 24)
+    version.Position = UDim2.new(0, 0, 0.5, -10)
+    version.BackgroundTransparency = 1
+    version.Text = "v1.0"
+    version.TextColor3 = Color3.fromRGB(200, 200, 200)
+    version.Font = Enum.Font.GothamBold
+    version.TextSize = 16
+    version.Parent = bg
+
+    local barBg = Instance.new("Frame")
+    barBg.Size = UDim2.fromOffset(300, 8)
+    barBg.Position = UDim2.new(0.5, -150, 0.5, 40)
+    barBg.BackgroundColor3 = Color3.fromRGB(30, 30, 30)
+    barBg.BorderSizePixel = 0
+    barBg.Parent = bg
+
+    local barStroke = Instance.new("UIStroke")
+    barStroke.Color = Color3.fromRGB(255, 255, 255)
+    barStroke.Thickness = 1
+    barStroke.Parent = barBg
+
+    local barFill = Instance.new("Frame")
+    barFill.Size = UDim2.new(0, 0, 1, 0)
+    barFill.BackgroundColor3 = Color3.fromRGB(200, 30, 30)
+    barFill.BorderSizePixel = 0
+    barFill.Parent = barBg
+
+    local percent = Instance.new("TextLabel")
+    percent.Size = UDim2.new(1, 0, 0, 20)
+    percent.Position = UDim2.new(0, 0, 0.5, 60)
+    percent.BackgroundTransparency = 1
+    percent.Text = "0%"
+    percent.TextColor3 = Color3.fromRGB(200, 200, 200)
+    percent.Font = Enum.Font.Gotham
+    percent.TextSize = 12
+    percent.Parent = bg
+
+    local status = Instance.new("TextLabel")
+    status.Size = UDim2.new(1, 0, 0, 20)
+    status.Position = UDim2.new(0, 0, 0.5, 85)
+    status.BackgroundTransparency = 1
+    status.Text = "Loading..."
+    status.TextColor3 = Color3.fromRGB(150, 150, 150)
+    status.Font = Enum.Font.Gotham
+    status.TextSize = 12
+    status.Parent = bg
+
+    return gui, barFill, percent, status
+end
+
+local function ShowKeyPrompt()
+    local gui = Instance.new("ScreenGui")
+    gui.Name = "BrutalKeyGui"
+    gui.ResetOnSpawn = false
+    gui.IgnoreGuiInset = true
+    gui.Parent = game:GetService("CoreGui")
+
+    local bg = Instance.new("Frame")
+    bg.Size = UDim2.new(1, 0, 1, 0)
+    bg.BackgroundColor3 = Color3.fromRGB(10, 10, 10)
+    bg.BorderSizePixel = 0
+    bg.Parent = gui
+
+    local title = Instance.new("TextLabel")
+    title.Size = UDim2.new(1, 0, 0, 60)
+    title.Position = UDim2.new(0, 0, 0.5, -110)
+    title.BackgroundTransparency = 1
+    title.Text = "BRUTALSCRIPT"
+    title.TextColor3 = Color3.fromRGB(255, 255, 255)
+    title.Font = Enum.Font.GothamBlack
+    title.TextSize = 42
+    title.TextStrokeTransparency = 0
+    title.TextStrokeColor3 = Color3.fromRGB(120, 20, 20)
+    title.Parent = bg
+
+    local version = Instance.new("TextLabel")
+    version.Size = UDim2.new(1, 0, 0, 24)
+    version.Position = UDim2.new(0, 0, 0.5, -60)
+    version.BackgroundTransparency = 1
+    version.Text = "v1.0 — Key Required"
+    version.TextColor3 = Color3.fromRGB(200, 200, 200)
+    version.Font = Enum.Font.GothamBold
+    version.TextSize = 14
+    version.Parent = bg
+
+    local box = Instance.new("TextBox")
+    box.Size = UDim2.fromOffset(340, 40)
+    box.Position = UDim2.new(0.5, -170, 0.5, -10)
+    box.BackgroundColor3 = Color3.fromRGB(20, 20, 20)
+    box.TextColor3 = Color3.fromRGB(255, 255, 255)
+    box.PlaceholderText = "Enter your key..."
+    box.PlaceholderColor3 = Color3.fromRGB(130, 130, 130)
+    box.Font = Enum.Font.Gotham
+    box.TextSize = 14
+    box.Text = ""
+    box.ClearTextOnFocus = false
+    box.Parent = bg
+
+    local boxStroke = Instance.new("UIStroke")
+    boxStroke.Color = Color3.fromRGB(255, 255, 255)
+    boxStroke.Thickness = 1
+    boxStroke.Parent = box
+
+    local btn = Instance.new("TextButton")
+    btn.Size = UDim2.fromOffset(340, 40)
+    btn.Position = UDim2.new(0.5, -170, 0.5, 45)
+    btn.BackgroundColor3 = Color3.fromRGB(200, 30, 30)
+    btn.Text = "SUBMIT"
+    btn.TextColor3 = Color3.fromRGB(255, 255, 255)
+    btn.Font = Enum.Font.GothamBold
+    btn.TextSize = 14
+    btn.Parent = bg
+
+    local btnStroke = Instance.new("UIStroke")
+    btnStroke.Color = Color3.fromRGB(255, 255, 255)
+    btnStroke.Thickness = 1
+    btnStroke.Parent = btn
+
+    local status = Instance.new("TextLabel")
+    status.Size = UDim2.fromOffset(340, 20)
+    status.Position = UDim2.new(0.5, -170, 0.5, 95)
+    status.BackgroundTransparency = 1
+    status.Text = ""
+    status.TextColor3 = Color3.fromRGB(255, 100, 100)
+    status.Font = Enum.Font.Gotham
+    status.TextSize = 13
+    status.Parent = bg
+
+    local hint = Instance.new("TextLabel")
+    hint.Size = UDim2.fromOffset(340, 20)
+    hint.Position = UDim2.new(0.5, -170, 0.5, 130)
+    hint.BackgroundTransparency = 1
+    hint.Text = "Test keys: BRUTAL-FREE-0001 / BRUTAL-VIP-0004"
+    hint.TextColor3 = Color3.fromRGB(120, 120, 120)
+    hint.Font = Enum.Font.Gotham
+    hint.TextSize = 11
+    hint.Parent = bg
+
+    btn.MouseButton1Click:Connect(function()
+        local key = box.Text
+        if key == "" then
+            status.Text = "Enter a key"
+            return
+        end
+
+        status.TextColor3 = Color3.fromRGB(200, 200, 200)
+        status.Text = "Checking..."
+
+        task.wait(0.4)
+
+        if VALID_KEYS[key] then
+            status.TextColor3 = Color3.fromRGB(100, 255, 120)
+            status.Text = "Key accepted!"
+            task.wait(0.6)
+            gui:Destroy()
+            KeyVerified = true
+        else
+            status.TextColor3 = Color3.fromRGB(255, 100, 100)
+            status.Text = "Invalid key"
+        end
+    end)
+end
+
+local loadingGui, barFill, percentLabel, statusLabel = ShowLoadingScreen()
+
+local steps = {
+    { 0.15, "Initializing..." },
+    { 0.35, "Loading libraries..." },
+    { 0.55, "Loading UI..." },
+    { 0.75, "Preparing features..." },
+    { 1.00, "Ready" },
+}
+
+for _, step in ipairs(steps) do
+    local target = step[1]
+    local text = step[2]
+
+    statusLabel.Text = text
+
+    local current = barFill.Size.X.Scale
+    while current < target do
+        current = math.min(current + 0.02, target)
+        barFill.Size = UDim2.new(current, 0, 1, 0)
+        percentLabel.Text = math.floor(current * 100) .. "%"
+        task.wait(0.02)
+    end
+end
+
+task.wait(0.5)
+loadingGui:Destroy()
+
+ShowKeyPrompt()
+
+local startTime = tick()
+repeat
+    task.wait(0.1)
+    if tick() - startTime > 180 then
+        return
+    end
+until KeyVerified
+
+-- ================= MAIN SCRIPT =================
+
 local Window = Library:CreateWindow({
     Title = "",
     Footer = "BRUTALSCRIPT - Violence District",
