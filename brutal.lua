@@ -16,17 +16,17 @@ local PARRY_COOLDOWN = 0.3
 local lastParry = 0
 
 local SPEED_ENABLED = false
-local SPEED_VALUE = 32
+local SPEED_VALUE = 16
 local JUMP_ENABLED = false
 local JUMP_VALUE = 80
 local NOCLIP_ENABLED = false
 local FLY_ENABLED = false
 local FLY_SPEED = 50
 local MOONWALK_ENABLED = false
-local MOONWALK_SPEED = 32
+local MOONWALK_SPEED = 16
 local MOONWALK_SIDE_INTERVAL = 1
 local moonwalkLastSide = 0
-local moonwalkSide = "A"
+local moonwalkSide = -1
 
 local FOV_ENABLED = false
 local FOV_VALUE = 70
@@ -75,8 +75,8 @@ loadingGui.IgnoreGuiInset = true
 loadingGui.Parent = game.CoreGui
 
 local loadFrame = Instance.new("Frame")
-loadFrame.Size = UDim2.new(0, 400, 0, 130)
-loadFrame.Position = UDim2.new(0.5, -200, 0.5, -65)
+loadFrame.Size = UDim2.new(0, 400, 0, 120)
+loadFrame.Position = UDim2.new(0.5, -200, 0.5, -60)
 loadFrame.BackgroundColor3 = Color3.fromRGB(15, 15, 15)
 loadFrame.BorderSizePixel = 0
 loadFrame.Parent = loadingGui
@@ -94,25 +94,16 @@ local loadTitle = Instance.new("TextLabel")
 loadTitle.Size = UDim2.new(1, -20, 0, 34)
 loadTitle.Position = UDim2.new(0, 10, 0, 8)
 loadTitle.BackgroundTransparency = 1
-loadTitle.Text = "BRUTAL SCRIPT"
+loadTitle.Text = "BRUTAL SCRIPT  v1.0"
 loadTitle.TextColor3 = Color3.fromRGB(255, 255, 255)
 loadTitle.Font = Enum.Font.GothamBlack
 loadTitle.TextSize = 22
+loadTitle.TextXAlignment = Enum.TextXAlignment.Left
 loadTitle.Parent = loadFrame
-
-local loadVersion = Instance.new("TextLabel")
-loadVersion.Size = UDim2.new(1, -20, 0, 16)
-loadVersion.Position = UDim2.new(0, 10, 0, 40)
-loadVersion.BackgroundTransparency = 1
-loadVersion.Text = "v1.0"
-loadVersion.TextColor3 = Color3.fromRGB(120, 120, 120)
-loadVersion.Font = Enum.Font.Gotham
-loadVersion.TextSize = 12
-loadVersion.Parent = loadFrame
 
 local loadBarBg = Instance.new("Frame")
 loadBarBg.Size = UDim2.new(0.9, 0, 0, 12)
-loadBarBg.Position = UDim2.new(0.05, 0, 0, 68)
+loadBarBg.Position = UDim2.new(0.05, 0, 0, 60)
 loadBarBg.BackgroundColor3 = Color3.fromRGB(40, 40, 40)
 loadBarBg.BorderSizePixel = 0
 loadBarBg.Parent = loadFrame
@@ -131,7 +122,7 @@ loadFillCorner.Parent = loadBarFill
 
 local loadPercent = Instance.new("TextLabel")
 loadPercent.Size = UDim2.new(1, -20, 0, 20)
-loadPercent.Position = UDim2.new(0, 10, 0, 90)
+loadPercent.Position = UDim2.new(0, 10, 0, 80)
 loadPercent.BackgroundTransparency = 1
 loadPercent.Text = "0%"
 loadPercent.TextColor3 = Color3.fromRGB(200, 200, 200)
@@ -950,17 +941,20 @@ track(RunService.Stepped:Connect(function(_, dt)
                 moonwalkAlign.Attachment0 = att
             end
 
-            local lookDir = -moveVec
-            moonwalkAlign.CFrame = CFrame.lookAt(root.Position, root.Position + lookDir)
-
             local now = tick()
             if now - moonwalkLastSide >= MOONWALK_SIDE_INTERVAL then
                 moonwalkLastSide = now
-                moonwalkSide = (moonwalkSide == "A") and "D" or "A"
+                moonwalkSide = -moonwalkSide
             end
-            VirtualInputManager:SendKeyEvent(true, Enum.KeyCode[moonwalkSide], false, game)
-            task.wait(0.01)
-            VirtualInputManager:SendKeyEvent(false, Enum.KeyCode[moonwalkSide], false, game)
+
+            local baseDir = -moveVec
+            local angleRad = math.rad(45 * moonwalkSide)
+            local rotated = Vector3.new(
+                baseDir.X * math.cos(angleRad) - baseDir.Z * math.sin(angleRad),
+                0,
+                baseDir.X * math.sin(angleRad) + baseDir.Z * math.cos(angleRad)
+            )
+            moonwalkAlign.CFrame = CFrame.lookAt(root.Position, root.Position + rotated)
         else
             hum.AutoRotate = true
             if moonwalkVel then moonwalkVel:Destroy() moonwalkVel = nil end
