@@ -25,8 +25,10 @@ local FLY_SPEED = 50
 local MOONWALK_ENABLED = false
 local MOONWALK_SPEED = 16
 local MOONWALK_SIDE_INTERVAL = 1
+local MOONWALK_TURN_SPEED = 6
 local moonwalkLastSide = 0
 local moonwalkSide = -1
+local moonwalkCurrentAngle = 0
 
 local FOV_ENABLED = false
 local FOV_VALUE = 70
@@ -75,8 +77,8 @@ loadingGui.IgnoreGuiInset = true
 loadingGui.Parent = game.CoreGui
 
 local loadFrame = Instance.new("Frame")
-loadFrame.Size = UDim2.new(0, 400, 0, 120)
-loadFrame.Position = UDim2.new(0.5, -200, 0.5, -60)
+loadFrame.Size = UDim2.new(0, 400, 0, 125)
+loadFrame.Position = UDim2.new(0.5, -200, 0.5, -62)
 loadFrame.BackgroundColor3 = Color3.fromRGB(15, 15, 15)
 loadFrame.BorderSizePixel = 0
 loadFrame.Parent = loadingGui
@@ -91,19 +93,30 @@ loadStroke.Thickness = 1.5
 loadStroke.Parent = loadFrame
 
 local loadTitle = Instance.new("TextLabel")
-loadTitle.Size = UDim2.new(1, -20, 0, 34)
+loadTitle.Size = UDim2.new(1, -20, 0, 30)
 loadTitle.Position = UDim2.new(0, 10, 0, 8)
 loadTitle.BackgroundTransparency = 1
-loadTitle.Text = "BRUTAL SCRIPT  v1.0"
+loadTitle.Text = "BRUTAL SCRIPT"
 loadTitle.TextColor3 = Color3.fromRGB(255, 255, 255)
 loadTitle.Font = Enum.Font.GothamBlack
 loadTitle.TextSize = 22
 loadTitle.TextXAlignment = Enum.TextXAlignment.Left
 loadTitle.Parent = loadFrame
 
+local loadVersion = Instance.new("TextLabel")
+loadVersion.Size = UDim2.new(1, -20, 0, 14)
+loadVersion.Position = UDim2.new(0, 10, 0, 36)
+loadVersion.BackgroundTransparency = 1
+loadVersion.Text = "v1.0"
+loadVersion.TextColor3 = Color3.fromRGB(120, 120, 120)
+loadVersion.Font = Enum.Font.Gotham
+loadVersion.TextSize = 11
+loadVersion.TextXAlignment = Enum.TextXAlignment.Left
+loadVersion.Parent = loadFrame
+
 local loadBarBg = Instance.new("Frame")
 loadBarBg.Size = UDim2.new(0.9, 0, 0, 12)
-loadBarBg.Position = UDim2.new(0.05, 0, 0, 60)
+loadBarBg.Position = UDim2.new(0.05, 0, 0, 62)
 loadBarBg.BackgroundColor3 = Color3.fromRGB(40, 40, 40)
 loadBarBg.BorderSizePixel = 0
 loadBarBg.Parent = loadFrame
@@ -122,7 +135,7 @@ loadFillCorner.Parent = loadBarFill
 
 local loadPercent = Instance.new("TextLabel")
 loadPercent.Size = UDim2.new(1, -20, 0, 20)
-loadPercent.Position = UDim2.new(0, 10, 0, 80)
+loadPercent.Position = UDim2.new(0, 10, 0, 82)
 loadPercent.BackgroundTransparency = 1
 loadPercent.Text = "0%"
 loadPercent.TextColor3 = Color3.fromRGB(200, 200, 200)
@@ -934,7 +947,7 @@ track(RunService.Stepped:Connect(function(_, dt)
                 moonwalkAlign = Instance.new("AlignOrientation")
                 moonwalkAlign.Mode = Enum.OrientationAlignmentMode.OneAttachment
                 moonwalkAlign.MaxTorque = 1e5
-                moonwalkAlign.Responsiveness = 100
+                moonwalkAlign.Responsiveness = 15
                 moonwalkAlign.Parent = root
                 local att = Instance.new("Attachment")
                 att.Parent = root
@@ -947,8 +960,11 @@ track(RunService.Stepped:Connect(function(_, dt)
                 moonwalkSide = -moonwalkSide
             end
 
+            local targetAngle = 45 * moonwalkSide
+            moonwalkCurrentAngle = moonwalkCurrentAngle + (targetAngle - moonwalkCurrentAngle) * math.min(MOONWALK_TURN_SPEED * dt, 1)
+
             local baseDir = -moveVec
-            local angleRad = math.rad(45 * moonwalkSide)
+            local angleRad = math.rad(moonwalkCurrentAngle)
             local rotated = Vector3.new(
                 baseDir.X * math.cos(angleRad) - baseDir.Z * math.sin(angleRad),
                 0,
@@ -957,11 +973,13 @@ track(RunService.Stepped:Connect(function(_, dt)
             moonwalkAlign.CFrame = CFrame.lookAt(root.Position, root.Position + rotated)
         else
             hum.AutoRotate = true
+            moonwalkCurrentAngle = 0
             if moonwalkVel then moonwalkVel:Destroy() moonwalkVel = nil end
             if moonwalkAlign then moonwalkAlign:Destroy() moonwalkAlign = nil end
         end
     else
         if hum then hum.AutoRotate = true end
+        moonwalkCurrentAngle = 0
         if moonwalkVel then moonwalkVel:Destroy() moonwalkVel = nil end
         if moonwalkAlign then moonwalkAlign:Destroy() moonwalkAlign = nil end
     end
@@ -1108,6 +1126,9 @@ createCollapsible(movementPage, "Moonwalk", function(content)
     end)
     createSlider(content, "Side Interval (x0.1s)", 1, 30, 10, function(val)
         MOONWALK_SIDE_INTERVAL = val / 10
+    end)
+    createSlider(content, "Turn Speed", 1, 20, MOONWALK_TURN_SPEED, function(val)
+        MOONWALK_TURN_SPEED = val
     end)
 end)
 
