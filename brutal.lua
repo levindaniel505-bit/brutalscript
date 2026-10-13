@@ -2604,26 +2604,41 @@ RunService.RenderStepped:Connect(function()
                     humanoid.WalkSpeed = Moonwalk.SlowSpeed
                 end
 
-                local moveDir = humanoid.MoveDirection
+                if humanoid.AutoRotate then
+                    humanoid.AutoRotate = false
+                end
 
-                if moveDir.Magnitude > 0 then
-                    local flatMove = Vector3.new(moveDir.X, 0, moveDir.Z)
-                    if flatMove.Magnitude > 0 then
-                        flatMove = flatMove.Unit
-                        local baseCF = CFrame.new(hrp.Position, hrp.Position - flatMove)
-                        local angle = math.sin(tick() * Moonwalk.SpamSpeed) * Moonwalk.Intensity
-                        hrp.CFrame = baseCF * CFrame.Angles(0, math.rad(angle), 0)
-                    end
+                local moveDir = humanoid.MoveDirection
+                local flatMove = Vector3.new(moveDir.X, 0, moveDir.Z)
+
+                local lookDir
+                if flatMove.Magnitude > 0.05 then
+                    lookDir = flatMove.Unit
                 else
                     local look = cam.CFrame.LookVector
-                    local flatLook = Vector3.new(look.X, 0, look.Z)
-                    if flatLook.Magnitude > 0 then
-                        flatLook = flatLook.Unit
-                        local baseCF = CFrame.new(hrp.Position, hrp.Position - flatLook)
-                        local angle = math.sin(tick() * Moonwalk.SpamSpeed) * Moonwalk.Intensity
-                        hrp.CFrame = baseCF * CFrame.Angles(0, math.rad(angle), 0)
+                    lookDir = Vector3.new(look.X, 0, look.Z)
+                    if lookDir.Magnitude > 0 then
+                        lookDir = lookDir.Unit
                     end
                 end
+
+                if lookDir and lookDir.Magnitude > 0 then
+                    local baseCF = CFrame.new(hrp.Position, hrp.Position - lookDir)
+                    local angle = math.sin(tick() * Moonwalk.SpamSpeed) * Moonwalk.Intensity
+                    local finalCF = baseCF * CFrame.Angles(0, math.rad(angle), 0)
+
+                    local targetRotation = CFrame.new(hrp.Position) * (finalCF - finalCF.Position)
+
+                    hrp.CFrame = hrp.CFrame:Lerp(targetRotation, 0.25)
+                end
+            end
+        end
+    else
+        local char = LocalPlayer.Character
+        if char then
+            local humanoid = char:FindFirstChildOfClass("Humanoid")
+            if humanoid and not humanoid.AutoRotate then
+                humanoid.AutoRotate = true
             end
         end
     end
