@@ -11,7 +11,6 @@ local ESP_PALLET = false
 local ESP_GENERATOR = false
 local AUTO_PARRY = false
 local PARRY_RADIUS = 15
-local PARRY_KEY = Enum.KeyCode.Q
 local PARRY_COOLDOWN = 0.3
 local lastParry = 0
 
@@ -662,7 +661,15 @@ local function updateGeneratorESP()
     end
 end
 
--- ========== УЛУЧШЕННЫЙ AUTO PARRY ==========
+-- ========== УЛУЧШЕННЫЙ AUTO PARRY (ПКМ) ==========
+local function tryParry()
+    pcall(function()
+        VirtualInputManager:SendMouseButtonEvent(0, 0, 2, true, game, 1)
+        task.wait(0.03)
+        VirtualInputManager:SendMouseButtonEvent(0, 0, 2, false, game, 1)
+    end)
+end
+
 local function getKillerAttacking()
     if not AUTO_PARRY then return false end
     
@@ -692,43 +699,38 @@ local function getKillerAttacking()
         if dist > PARRY_RADIUS then continue end
         
         local state = hum:GetState()
-        local isAttacking = state == Enum.HumanoidStateType.Attacking
+        if state == Enum.HumanoidStateType.Attacking
             or state == Enum.HumanoidStateType.Lunge
-            or state == Enum.HumanoidStateType.Physics
-        
-        if not isAttacking then
-            for _, track in ipairs(hum:GetPlayingAnimationTracks()) do
-                local animName = track.Animation.Name:lower()
-                if animName:find("attack") or animName:find("swing") or animName:find("lunge") or animName:find("hit") then
-                    isAttacking = true
-                    break
-                end
-            end
+            or state == Enum.HumanoidStateType.Physics then
+            return true
         end
         
-        if isAttacking then
-            return true
+        for _, track in ipairs(hum:GetPlayingAnimationTracks()) do
+            local animName = track.Animation.Name:lower()
+            if animName:find("attack") or animName:find("swing") 
+                or animName:find("lunge") or animName:find("hit")
+                or animName:find("slash") or animName:find("stab") then
+                return true
+            end
         end
     end
     return false
 end
 
-table.insert(loops, task.spawn(function()
+task.spawn(function()
     while task.wait(0.05) do
         if AUTO_PARRY then
             if getKillerAttacking() then
                 local now = tick()
-                local randomDelay = 0.05 + math.random() * 0.1
-                if now - lastParry >= PARRY_COOLDOWN + randomDelay then
+                if now - lastParry >= PARRY_COOLDOWN then
                     lastParry = now
-                    VirtualInputManager:SendKeyEvent(true, PARRY_KEY, false, game)
-                    task.wait(0.03 + math.random() * 0.04)
-                    VirtualInputManager:SendKeyEvent(false, PARRY_KEY, false, game)
+                    tryParry()
+                    print("[AUTO PARRY] Сработало!")
                 end
             end
         end
     end
-end))
+end)
 -- ========== КОНЕЦ AUTO PARRY ==========
 
 track(RunService.RenderStepped:Connect(function()
@@ -865,7 +867,6 @@ closeBtn.MouseButton1Click:Connect(function()
     end
 end)
 
--- ========== СОЗДАНИЕ МЕНЮ ==========
 createToggle(espPage, "ESP Killers", function(state)
     ESP_KILLER = state
     updateBindLabel("espKiller", state)
