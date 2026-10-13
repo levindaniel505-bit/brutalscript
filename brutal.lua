@@ -31,6 +31,8 @@ local moonwalkLastSide = 0
 local moonwalkSide = 1
 local moonwalkTargetAngle = 0
 local moonwalkCurrentAngle = 0
+local moonwalkGyro = nil
+local moonwalkVel = nil
 
 local NO_FALL_ENABLED = false
 local NO_SLOWED_ENABLED = false
@@ -56,8 +58,6 @@ local loops = {}
 local bindingMode = nil
 local menuMinimized = false
 local flyVelocity = nil
-local moonwalkVel = nil
-local moonwalkAlign = nil
 
 local BIND_FILE = "brutal_binds.json"
 
@@ -969,24 +969,20 @@ track(RunService.Stepped:Connect(function(_, dt)
 
         if moveDir.Magnitude > 0 then
             hum.AutoRotate = false
-            local moveVec = Vector3.new(moveDir.X, 0, moveDir.Z).Unit
+
+            if not moonwalkGyro or not moonwalkGyro.Parent then
+                moonwalkGyro = Instance.new("BodyGyro")
+                moonwalkGyro.MaxTorque = Vector3.new(1e5, 1e5, 1e5)
+                moonwalkGyro.P = 1e4
+                moonwalkGyro.D = 500
+                moonwalkGyro.Parent = root
+            end
 
             if not moonwalkVel or not moonwalkVel.Parent then
                 moonwalkVel = Instance.new("BodyVelocity")
                 moonwalkVel.MaxForce = Vector3.new(1e5, 0, 1e5)
                 moonwalkVel.P = 1e4
                 moonwalkVel.Parent = root
-            end
-
-            if not moonwalkAlign or not moonwalkAlign.Parent then
-                moonwalkAlign = Instance.new("AlignOrientation")
-                moonwalkAlign.Mode = Enum.OrientationAlignmentMode.OneAttachment
-                moonwalkAlign.MaxTorque = 1e5
-                moonwalkAlign.Responsiveness = 15
-                moonwalkAlign.Parent = root
-                local att = Instance.new("Attachment")
-                att.Parent = root
-                moonwalkAlign.Attachment0 = att
             end
 
             local now = tick()
@@ -998,33 +994,25 @@ track(RunService.Stepped:Connect(function(_, dt)
 
             moonwalkCurrentAngle = moonwalkCurrentAngle + (moonwalkTargetAngle - moonwalkCurrentAngle) * math.min(MOONWALK_TURN_SPEED * dt, 1)
 
-            local baseDir = -moveVec
+            local moveVec = Vector3.new(moveDir.X, 0, moveDir.Z).Unit
             local angleRad = math.rad(moonwalkCurrentAngle)
-
-            local bodyDir = Vector3.new(
-                baseDir.X * math.cos(angleRad) - baseDir.Z * math.sin(angleRad),
+            local rotatedDir = Vector3.new(
+                moveVec.X * math.cos(angleRad) - moveVec.Z * math.sin(angleRad),
                 0,
-                baseDir.X * math.sin(angleRad) + baseDir.Z * math.cos(angleRad)
+                moveVec.X * math.sin(angleRad) + moveVec.Z * math.cos(angleRad)
             )
 
-            local moveAngleRad = math.rad(moonwalkCurrentAngle)
-            local moveDirRotated = Vector3.new(
-                moveVec.X * math.cos(moveAngleRad) - moveVec.Z * math.sin(moveAngleRad),
-                0,
-                moveVec.X * math.sin(moveAngleRad) + moveVec.Z * math.cos(moveAngleRad)
-            )
-
-            moonwalkVel.Velocity = moveDirRotated * MOONWALK_SPEED
-            moonwalkAlign.CFrame = CFrame.lookAt(root.Position, root.Position + bodyDir)
+            moonwalkVel.Velocity = rotatedDir * MOONWALK_SPEED
+            moonwalkGyro.CFrame = CFrame.lookAt(Vector3.new(0, 0, 0), -rotatedDir)
         else
             hum.AutoRotate = true
+            if moonwalkGyro then moonwalkGyro:Destroy() moonwalkGyro = nil end
             if moonwalkVel then moonwalkVel:Destroy() moonwalkVel = nil end
-            if moonwalkAlign then moonwalkAlign:Destroy() moonwalkAlign = nil end
         end
     else
         if hum then hum.AutoRotate = true end
+        if moonwalkGyro then moonwalkGyro:Destroy() moonwalkGyro = nil end
         if moonwalkVel then moonwalkVel:Destroy() moonwalkVel = nil end
-        if moonwalkAlign then moonwalkAlign:Destroy() moonwalkAlign = nil end
     end
 end))
 
