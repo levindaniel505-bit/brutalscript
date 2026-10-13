@@ -3,16 +3,23 @@ local RunService = game:GetService("RunService")
 local Workspace = game:GetService("Workspace")
 local UserInputService = game:GetService("UserInputService")
 local VirtualInputManager = game:GetService("VirtualInputManager")
+local HttpService = game:GetService("HttpService")
 local LocalPlayer = Players.LocalPlayer
 
--- ========== НАСТРОЙКИ ==========
 local ESP_KILLER = false
 local ESP_PALLET = false
 local ESP_GENERATOR = false
 local AUTO_PARRY = false
 local PARRY_RADIUS = 15
+local PARRY_KEY = Enum.KeyCode.Q
 local PARRY_COOLDOWN = 0.3
 local lastParry = 0
+
+local PARRY_MODE = "key"
+local PARRY_REMOTE_PATH = "ReplicatedStorage.Remotes.Parry"
+local PARRY_REMOTE = nil
+
+local DEBUG = true
 
 local ESP_DISTANCE = true
 local SPEED_ENABLED = false
@@ -59,6 +66,17 @@ local function getKeyName(key)
     return key.Name
 end
 
+local function track(conn)
+    table.insert(connections, conn)
+    return conn
+end
+
+local function debugPrint(...)
+    if DEBUG then
+        print("[BRUTAL DEBUG]", ...)
+    end
+end
+
 local function saveBinds()
     if not writefile then return end
     local data = {}
@@ -66,7 +84,7 @@ local function saveBinds()
         data[k] = v.Name
     end
     pcall(function()
-        writefile(BIND_FILE, game:GetService("HttpService"):JSONEncode(data))
+        writefile(BIND_FILE, HttpService:JSONEncode(data))
     end)
 end
 
@@ -74,7 +92,7 @@ local function loadBinds()
     if not (readfile and isfile) then return end
     if not isfile(BIND_FILE) then return end
     pcall(function()
-        local data = game:GetService("HttpService"):JSONDecode(readfile(BIND_FILE))
+        local data = HttpService:JSONDecode(readfile(BIND_FILE))
         for k, v in pairs(data) do
             if BINDS[k] then
                 local key = Enum.KeyCode[v]
@@ -84,9 +102,23 @@ local function loadBinds()
     end)
 end
 
-local function track(conn)
-    table.insert(connections, conn)
-    return conn
+local function resolveRemote()
+    if PARRY_MODE ~= "remote" then return end
+    local ok, remote = pcall(function()
+        local parts = string.split(PARRY_REMOTE_PATH, ".")
+        local obj = game
+        for _, part in ipairs(parts) do
+            obj = obj:WaitForChild(part, 5)
+            if not obj then error("Не найден: " .. part) end
+        end
+        return obj
+    end)
+    if ok and remote then
+        PARRY_REMOTE = remote
+        debugPrint("Remote найден:", remote:GetFullName())
+    else
+        debugPrint("Remote НЕ найден по пути:", PARRY_REMOTE_PATH)
+    end
 end
 
 local screenGui = Instance.new("ScreenGui")
@@ -103,7 +135,6 @@ mainFrame.Active = true
 mainFrame.Draggable = true
 mainFrame.Visible = true
 mainFrame.Parent = screenGui
-
 _G.mainFrame = mainFrame
 
 local mainCorner = Instance.new("UICorner")
@@ -283,7 +314,6 @@ local bindActions = {
 local function createToggle(parent, text, callback)
     local btn = Instance.new("TextButton")
     btn.Size = UDim2.new(1, 0, 0, 36)
-    btn.Position = UDim2.new(0, 0, 0, 0)
     btn.BackgroundColor3 = Color3.fromRGB(40, 40, 40)
     btn.Text = text .. "   [OFF]"
     btn.TextColor3 = Color3.fromRGB(255, 255, 255)
@@ -316,48 +346,9 @@ local function createToggle(parent, text, callback)
     return btn
 end
 
-local function createColorButton(parent, text, callback)
-    local btn = Instance.new("TextButton")
-    btn.Size = UDim2.new(1, 0, 0, 32)
-    btn.Position = UDim2.new(0, 0, 0, 0)
-    btn.BackgroundColor3 = Color3.fromRGB(40, 40, 40)
-    btn.Text = text
-    btn.TextColor3 = Color3.fromRGB(255, 255, 255)
-    btn.Font = Enum.Font.Gotham
-    btn.TextSize = 12
-    btn.Parent = parent
-    local c = Instance.new("UICorner")
-    c.CornerRadius = UDim.new(0, 8)
-    c.Parent = btn
-    local s = Instance.new("UIStroke")
-    s.Color = Color3.fromRGB(80, 80, 80)
-    s.Thickness = 1
-    s.Parent = btn
-
-    local colors = {
-        Color3.fromRGB(255, 0, 0),
-        Color3.fromRGB(0, 255, 0),
-        Color3.fromRGB(0, 100, 255),
-        Color3.fromRGB(255, 255, 0),
-        Color3.fromRGB(0, 255, 255),
-        Color3.fromRGB(255, 0, 255),
-        Color3.fromRGB(255, 255, 255),
-        Color3.fromRGB(255, 128, 0)
-    }
-    local idx = 0
-
-    btn.MouseButton1Click:Connect(function()
-        idx = idx + 1
-        if idx > #colors then idx = 1 end
-        callback(colors[idx])
-        btn.Text = text .. "  (" .. idx .. "/" .. #colors .. ")"
-    end)
-end
-
 local function createSlider(parent, text, minVal, maxVal, defaultVal, callback)
     local container = Instance.new("Frame")
     container.Size = UDim2.new(1, 0, 0, 50)
-    container.Position = UDim2.new(0, 0, 0, 0)
     container.BackgroundColor3 = Color3.fromRGB(30, 30, 30)
     container.BorderSizePixel = 0
     container.Parent = parent
@@ -456,7 +447,6 @@ end
 local function createBindButton(parent, id, text)
     local btn = Instance.new("TextButton")
     btn.Size = UDim2.new(1, 0, 0, 40)
-    btn.Position = UDim2.new(0, 0, 0, 0)
     btn.BackgroundColor3 = Color3.fromRGB(40, 40, 40)
     btn.Text = text .. ": " .. getKeyName(BINDS[id])
     btn.TextColor3 = Color3.fromRGB(255, 255, 255)
@@ -515,36 +505,27 @@ local function isKiller(plr)
     if not char then return false end
     local hum = char:FindFirstChildOfClass("Humanoid")
     if not hum then return false end
+
     if hum.MaxHealth > 500 then return true end
     if plr.Team and plr.Team.Name:lower():find("killer") then return true end
     if plr:GetAttribute("Role") == "Killer" then return true end
+    if plr:GetAttribute("IsKiller") == true then return true end
+    if plr:GetAttribute("Killer") == true then return true end
+    if plr.TeamColor == BrickColor.new("Really red") then return true end
+
     return false
 end
 
 local function isPallet(obj)
     if not obj:IsA("Model") and not obj:IsA("BasePart") then return false end
     local n = obj.Name:lower()
-    if not (n:find("pallet") or n:find("palka") or n:find("паллет")) then return false end
-    if obj:IsA("Model") and not obj.PrimaryPart then
-        for _, child in ipairs(obj:GetChildren()) do
-            if child:IsA("BasePart") then return true end
-        end
-        return false
-    end
-    return true
+    return n:find("pallet") or n:find("palka") or n:find("паллет")
 end
 
 local function isGenerator(obj)
     if not obj:IsA("Model") and not obj:IsA("BasePart") then return false end
     local n = obj.Name:lower()
-    if not (n:find("generator") or n:find("generat") or n:find("генератор")) then return false end
-    if obj:IsA("Model") and not obj.PrimaryPart then
-        for _, child in ipairs(obj:GetChildren()) do
-            if child:IsA("BasePart") then return true end
-        end
-        return false
-    end
-    return true
+    return n:find("generator") or n:find("generat") or n:find("генератор")
 end
 
 local function getDistance(root)
@@ -661,79 +642,89 @@ local function updateGeneratorESP()
     end
 end
 
--- ========== AUTO PARRY через атрибут ==========
-local function tryParry()
-    local char = LocalPlayer.Character
-    if not char then return end
-    pcall(function()
-        char:SetAttribute("Parry", true)
-        task.wait(0.1)
-        char:SetAttribute("Parry", false)
-    end)
-end
-
 local function getKillerAttacking()
     if not AUTO_PARRY then return false end
-    
+
     local myChar = LocalPlayer.Character
     if not myChar then return false end
     local myHum = myChar:FindFirstChildOfClass("Humanoid")
     if not myHum or myHum.Health <= 0 then return false end
-    
+
     local myRoot = myChar:FindFirstChild("HumanoidRootPart")
     if not myRoot then return false end
 
     for _, plr in ipairs(Players:GetPlayers()) do
         if plr == LocalPlayer then continue end
-        
+
         local char = plr.Character
         if not char then continue end
-        
+
         local hum = char:FindFirstChildOfClass("Humanoid")
         if not hum or hum.Health <= 0 then continue end
-        
+
         if not isKiller(plr) then continue end
-        
+
         local killerRoot = char:FindFirstChild("HumanoidRootPart")
         if not killerRoot then continue end
-        
+
         local dist = (myRoot.Position - killerRoot.Position).Magnitude
         if dist > PARRY_RADIUS then continue end
-        
+
         local state = hum:GetState()
-        if state == Enum.HumanoidStateType.Attacking
+        local isAttacking = state == Enum.HumanoidStateType.Attacking
             or state == Enum.HumanoidStateType.Lunge
-            or state == Enum.HumanoidStateType.Physics then
-            return true
-        end
-        
-        for _, track in ipairs(hum:GetPlayingAnimationTracks()) do
-            local animName = track.Animation.Name:lower()
-            if animName:find("attack") or animName:find("swing") 
-                or animName:find("lunge") or animName:find("hit")
-                or animName:find("slash") or animName:find("stab") then
-                return true
+            or state == Enum.HumanoidStateType.Physics
+
+        if not isAttacking then
+            for _, t in ipairs(hum:GetPlayingAnimationTracks()) do
+                local animName = t.Animation.Name:lower()
+                if animName:find("attack") or animName:find("swing") or animName:find("lunge") or animName:find("hit") then
+                    isAttacking = true
+                    break
+                end
             end
+        end
+
+        if isAttacking then
+            debugPrint("Киллер атакует! Дистанция:", math.floor(dist), "Киллер:", plr.Name)
+            return true
         end
     end
     return false
 end
 
-task.spawn(function()
+local function performParry()
+    if PARRY_MODE == "remote" and PARRY_REMOTE then
+        local ok, err = pcall(function()
+            PARRY_REMOTE:FireServer()
+        end)
+        if not ok then
+            debugPrint("Ошибка вызова Remote:", err)
+        else
+            debugPrint("Parry через Remote вызван")
+        end
+    else
+        VirtualInputManager:SendKeyEvent(true, PARRY_KEY, false, game)
+        task.wait(0.03 + math.random() * 0.04)
+        VirtualInputManager:SendKeyEvent(false, PARRY_KEY, false, game)
+        debugPrint("Parry через клавишу", PARRY_KEY.Name)
+    end
+end
+
+table.insert(loops, task.spawn(function()
     while task.wait(0.05) do
         if AUTO_PARRY then
             if getKillerAttacking() then
                 local now = tick()
-                if now - lastParry >= PARRY_COOLDOWN then
+                local randomDelay = math.random() * 0.05
+                if now - lastParry >= PARRY_COOLDOWN + randomDelay then
                     lastParry = now
-                    tryParry()
-                    print("[AUTO PARRY] Сработало!")
+                    performParry()
                 end
             end
         end
     end
-end)
--- ========== КОНЕЦ AUTO PARRY ==========
+end))
 
 track(RunService.RenderStepped:Connect(function()
     updateKillerESP()
@@ -760,17 +751,8 @@ track(RunService.Stepped:Connect(function(_, dt)
     local root = char and char:FindFirstChild("HumanoidRootPart")
 
     if hum then
-        if SPEED_ENABLED then
-            hum.WalkSpeed = SPEED_VALUE
-        else
-            hum.WalkSpeed = 16
-        end
-
-        if JUMP_ENABLED then
-            hum.JumpPower = JUMP_VALUE
-        else
-            hum.JumpPower = 50
-        end
+        hum.WalkSpeed = SPEED_ENABLED and SPEED_VALUE or 16
+        hum.JumpPower = JUMP_ENABLED and JUMP_VALUE or 50
     end
 
     if NOCLIP_ENABLED and char then
@@ -929,6 +911,8 @@ createBindButton(bindsPage, "noclip", "Noclip")
 createBindButton(bindsPage, "speed", "Speed")
 
 loadBinds()
+resolveRemote()
+
 for id, _ in pairs(BINDS) do
     updateBindLabel(id, false)
 end
