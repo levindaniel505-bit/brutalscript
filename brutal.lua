@@ -22,6 +22,8 @@ local JUMP_VALUE = 80
 local NOCLIP_ENABLED = false
 local FLY_ENABLED = false
 local FLY_SPEED = 50
+local MOONWALK_ENABLED = false
+local MOONWALK_SPEED = 32
 
 local FOV_ENABLED = false
 local FOV_VALUE = 70
@@ -50,6 +52,7 @@ local BINDS = {
     fly = Enum.KeyCode.F5,
     noclip = Enum.KeyCode.F6,
     speed = Enum.KeyCode.F7,
+    moonwalk = Enum.KeyCode.F8,
 }
 
 local bindLabels = {}
@@ -278,43 +281,11 @@ local bindActions = {
         SPEED_ENABLED = not SPEED_ENABLED
         updateBindLabel("speed", SPEED_ENABLED)
     end,
+    moonwalk = function()
+        MOONWALK_ENABLED = not MOONWALK_ENABLED
+        updateBindLabel("moonwalk", MOONWALK_ENABLED)
+    end,
 }
-
-local function createToggle(parent, text, callback)
-    local btn = Instance.new("TextButton")
-    btn.Size = UDim2.new(1, 0, 0, 36)
-    btn.Position = UDim2.new(0, 0, 0, 0)
-    btn.BackgroundColor3 = Color3.fromRGB(40, 40, 40)
-    btn.Text = text .. "   [OFF]"
-    btn.TextColor3 = Color3.fromRGB(255, 255, 255)
-    btn.Font = Enum.Font.GothamBold
-    btn.TextSize = 13
-    btn.Parent = parent
-    local c = Instance.new("UICorner")
-    c.CornerRadius = UDim.new(0, 8)
-    c.Parent = btn
-    local s = Instance.new("UIStroke")
-    s.Color = Color3.fromRGB(80, 80, 80)
-    s.Thickness = 1
-    s.Parent = btn
-
-    local state = false
-
-    btn.MouseButton1Click:Connect(function()
-        state = not state
-        if state then
-            btn.Text = text .. "   [ON]"
-            btn.BackgroundColor3 = Color3.fromRGB(60, 60, 60)
-            s.Color = Color3.fromRGB(255, 255, 255)
-        else
-            btn.Text = text .. "   [OFF]"
-            btn.BackgroundColor3 = Color3.fromRGB(40, 40, 40)
-            s.Color = Color3.fromRGB(80, 80, 80)
-        end
-        callback(state)
-    end)
-    return btn
-end
 
 local function createStateButton(parent, text, getState, setState)
     local btn = Instance.new("TextButton")
@@ -410,44 +381,6 @@ local function createCollapsible(parent, titleText, buildContent)
     end)
 
     return container, content, btn
-end
-
-local function createColorButton(parent, text, callback)
-    local btn = Instance.new("TextButton")
-    btn.Size = UDim2.new(0.9, 0, 0, 32)
-    btn.Position = UDim2.new(0.05, 0, 0, 0)
-    btn.BackgroundColor3 = Color3.fromRGB(40, 40, 40)
-    btn.Text = text
-    btn.TextColor3 = Color3.fromRGB(255, 255, 255)
-    btn.Font = Enum.Font.Gotham
-    btn.TextSize = 12
-    btn.Parent = parent
-    local c = Instance.new("UICorner")
-    c.CornerRadius = UDim.new(0, 8)
-    c.Parent = btn
-    local s = Instance.new("UIStroke")
-    s.Color = Color3.fromRGB(80, 80, 80)
-    s.Thickness = 1
-    s.Parent = btn
-
-    local colors = {
-        Color3.fromRGB(255, 0, 0),
-        Color3.fromRGB(0, 255, 0),
-        Color3.fromRGB(0, 100, 255),
-        Color3.fromRGB(255, 255, 0),
-        Color3.fromRGB(0, 255, 255),
-        Color3.fromRGB(255, 0, 255),
-        Color3.fromRGB(255, 255, 255),
-        Color3.fromRGB(255, 128, 0)
-    }
-    local idx = 0
-
-    btn.MouseButton1Click:Connect(function()
-        idx = idx + 1
-        if idx > #colors then idx = 1 end
-        callback(colors[idx])
-        btn.Text = text .. "  (" .. idx .. "/" .. #colors .. ")"
-    end)
 end
 
 local function createSlider(parent, text, minVal, maxVal, defaultVal, callback)
@@ -827,6 +760,7 @@ table.insert(loops, task.spawn(function()
 end))
 
 local flyVelocity = nil
+local moonwalkVelocity = nil
 
 track(RunService.Stepped:Connect(function(_, dt)
     local char = LocalPlayer.Character
@@ -895,6 +829,31 @@ track(RunService.Stepped:Connect(function(_, dt)
             flyVelocity = nil
         end
     end
+
+    if MOONWALK_ENABLED and hum and root then
+        local moveDir = hum.MoveDirection
+        if moveDir.Magnitude > 0 then
+            local backward = -moveDir
+            hum.WalkSpeed = MOONWALK_SPEED
+            if not moonwalkVelocity or not moonwalkVelocity.Parent then
+                moonwalkVelocity = Instance.new("BodyVelocity")
+                moonwalkVelocity.MaxForce = Vector3.new(1e5, 0, 1e5)
+                moonwalkVelocity.P = 1e4
+                moonwalkVelocity.Parent = root
+            end
+            moonwalkVelocity.Velocity = Vector3.new(backward.X * MOONWALK_SPEED, 0, backward.Z * MOONWALK_SPEED)
+        else
+            hum.WalkSpeed = SPEED_ENABLED and SPEED_VALUE or 16
+            if moonwalkVelocity then
+                moonwalkVelocity:Destroy()
+                moonwalkVelocity = nil
+            end
+        end
+    else        if moonwalkVelocity then
+            moonwalkVelocity:Destroy()
+            moonwalkVelocity = nil
+        end
+    end
 end))
 
 track(UserInputService.InputBegan:Connect(function(input, gpe)
@@ -954,8 +913,8 @@ createCollapsible(espPage, "ESP Killers", function(content)
         ESP_KILLER = v
         updateBindLabel("espKiller", v)
     end)
-    createToggle(content, "Show Distance", function(state)
-        ESP_DISTANCE = state
+    createStateButton(content, "Show Distance", function() return ESP_DISTANCE end, function(v)
+        ESP_DISTANCE = v
     end)
 end)
 
@@ -1028,6 +987,16 @@ createCollapsible(movementPage, "Fly", function(content)
     end)
 end)
 
+createCollapsible(movementPage, "Auto Moonwalk", function(content)
+    createStateButton(content, "Moonwalk", function() return MOONWALK_ENABLED end, function(v)
+        MOONWALK_ENABLED = v
+        updateBindLabel("moonwalk", v)
+    end)
+    createSlider(content, "Moonwalk Speed", 16, 80, MOONWALK_SPEED, function(val)
+        MOONWALK_SPEED = val
+    end)
+end)
+
 createSectionLabel(bindsPage, "Keybinds (click to rebind)")
 createBindButton(bindsPage, "toggleMenu", "Toggle Menu")
 createBindButton(bindsPage, "espKiller", "ESP Killers")
@@ -1037,6 +1006,7 @@ createBindButton(bindsPage, "autoParry", "Auto Parry")
 createBindButton(bindsPage, "fly", "Fly")
 createBindButton(bindsPage, "noclip", "Noclip")
 createBindButton(bindsPage, "speed", "Speed")
+createBindButton(bindsPage, "moonwalk", "Moonwalk")
 
 loadBinds()
 for id, _ in pairs(BINDS) do
