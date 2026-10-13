@@ -15,7 +15,6 @@ local ESP_GENERATOR = false
 local ESP_DISTANCE = true
 local AUTO_PARRY = false
 local PARRY_RADIUS = 15
-local PARRY_KEY = Enum.KeyCode.Q
 local PARRY_REACTION_MS = 30
 local PARRY_WINDOW_START = 0.1
 local PARRY_WINDOW_END = 0.4
@@ -1271,9 +1270,9 @@ local function tryParry()
                     task.wait(PARRY_REACTION_MS / 1000)
                 end
                 lastParry = tick()
-                VirtualInputManager:SendKeyEvent(true, PARRY_KEY, false, game)
+                VirtualInputManager:SendMouseButtonEvent(0, 0, 2, true, game, 1)
                 task.wait(0.05)
-                VirtualInputManager:SendKeyEvent(false, PARRY_KEY, false, game)
+                VirtualInputManager:SendMouseButtonEvent(0, 0, 2, false, game, 1)
                 return
             end
         end
@@ -1527,6 +1526,7 @@ createCollapsible(survivorPage, "Auto Parry", function(content)
         updateBindLabel("autoParry", v)
         saveConfig()
     end)
+    createSectionLabel(content, "Parry: Right Mouse (MouseButton2)")
     createSlider(content, "Parry Range", 5, 30, PARRY_RADIUS, function(val)
         PARRY_RADIUS = val
         saveConfig()
