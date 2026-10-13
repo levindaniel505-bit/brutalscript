@@ -661,12 +661,14 @@ local function updateGeneratorESP()
     end
 end
 
--- ========== УЛУЧШЕННЫЙ AUTO PARRY (ПКМ) ==========
+-- ========== AUTO PARRY через атрибут ==========
 local function tryParry()
+    local char = LocalPlayer.Character
+    if not char then return end
     pcall(function()
-        VirtualInputManager:SendMouseButtonEvent(0, 0, 2, true, game, 1)
-        task.wait(0.03)
-        VirtualInputManager:SendMouseButtonEvent(0, 0, 2, false, game, 1)
+        char:SetAttribute("Parry", true)
+        task.wait(0.1)
+        char:SetAttribute("Parry", false)
     end)
 end
 
