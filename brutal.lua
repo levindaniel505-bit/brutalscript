@@ -977,7 +977,6 @@ track(RunService.Stepped:Connect(function(_, dt)
                 moonwalkVel.P = 1e4
                 moonwalkVel.Parent = root
             end
-            moonwalkVel.Velocity = moveVec * MOONWALK_SPEED
 
             if not moonwalkAlign or not moonwalkAlign.Parent then
                 moonwalkAlign = Instance.new("AlignOrientation")
@@ -1001,12 +1000,22 @@ track(RunService.Stepped:Connect(function(_, dt)
 
             local baseDir = -moveVec
             local angleRad = math.rad(moonwalkCurrentAngle)
-            local rotated = Vector3.new(
+
+            local bodyDir = Vector3.new(
                 baseDir.X * math.cos(angleRad) - baseDir.Z * math.sin(angleRad),
                 0,
                 baseDir.X * math.sin(angleRad) + baseDir.Z * math.cos(angleRad)
             )
-            moonwalkAlign.CFrame = CFrame.lookAt(root.Position, root.Position + rotated)
+
+            local moveAngleRad = math.rad(moonwalkCurrentAngle)
+            local moveDirRotated = Vector3.new(
+                moveVec.X * math.cos(moveAngleRad) - moveVec.Z * math.sin(moveAngleRad),
+                0,
+                moveVec.X * math.sin(moveAngleRad) + moveVec.Z * math.cos(moveAngleRad)
+            )
+
+            moonwalkVel.Velocity = moveDirRotated * MOONWALK_SPEED
+            moonwalkAlign.CFrame = CFrame.lookAt(root.Position, root.Position + bodyDir)
         else
             hum.AutoRotate = true
             if moonwalkVel then moonwalkVel:Destroy() moonwalkVel = nil end
