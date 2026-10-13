@@ -24,7 +24,9 @@ local FLY_ENABLED = false
 local FLY_SPEED = 50
 local MOONWALK_ENABLED = false
 local MOONWALK_INTERVAL = 0.05
+local MOONWALK_SWITCH_TIME = 1
 local moonwalkLastSwitch = 0
+local moonwalkLastSide = 0
 local moonwalkSide = "A"
 
 local FOV_ENABLED = false
@@ -37,6 +39,11 @@ local GENERATOR_COLOR = Color3.fromRGB(255, 255, 255)
 local killerESP = {}
 local palletESP = {}
 local generatorESP = {}
+local palletCache = {}
+local generatorCache = {}
+local lastPalletScan = 0
+local lastGeneratorScan = 0
+local SCAN_INTERVAL = 5
 
 local connections = {}
 local loops = {}
@@ -58,6 +65,77 @@ local BINDS = {
 }
 
 local bindLabels = {}
+
+local loadingGui = Instance.new("ScreenGui")
+loadingGui.Name = "BrutalLoading"
+loadingGui.ResetOnSpawn = false
+loadingGui.IgnoreGuiInset = true
+loadingGui.Parent = game.CoreGui
+
+local loadFrame = Instance.new("Frame")
+loadFrame.Size = UDim2.new(0, 400, 0, 120)
+loadFrame.Position = UDim2.new(0.5, -200, 0.5, -60)
+loadFrame.BackgroundColor3 = Color3.fromRGB(15, 15, 15)
+loadFrame.BorderSizePixel = 0
+loadFrame.Parent = loadingGui
+
+local loadCorner = Instance.new("UICorner")
+loadCorner.CornerRadius = UDim.new(0, 14)
+loadCorner.Parent = loadFrame
+
+local loadStroke = Instance.new("UIStroke")
+loadStroke.Color = Color3.fromRGB(255, 255, 255)
+loadStroke.Thickness = 1.5
+loadStroke.Parent = loadFrame
+
+local loadTitle = Instance.new("TextLabel")
+loadTitle.Size = UDim2.new(1, -20, 0, 40)
+loadTitle.Position = UDim2.new(0, 10, 0, 10)
+loadTitle.BackgroundTransparency = 1
+loadTitle.Text = "BRUTAL SCRIPT"
+loadTitle.TextColor3 = Color3.fromRGB(255, 255, 255)
+loadTitle.Font = Enum.Font.GothamBlack
+loadTitle.TextSize = 22
+loadTitle.Parent = loadFrame
+
+local loadBarBg = Instance.new("Frame")
+loadBarBg.Size = UDim2.new(0.9, 0, 0, 12)
+loadBarBg.Position = UDim2.new(0.05, 0, 0, 60)
+loadBarBg.BackgroundColor3 = Color3.fromRGB(40, 40, 40)
+loadBarBg.BorderSizePixel = 0
+loadBarBg.Parent = loadFrame
+local loadBarCorner = Instance.new("UICorner")
+loadBarCorner.CornerRadius = UDim.new(1, 0)
+loadBarCorner.Parent = loadBarBg
+
+local loadBarFill = Instance.new("Frame")
+loadBarFill.Size = UDim2.new(0, 0, 1, 0)
+loadBarFill.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
+loadBarFill.BorderSizePixel = 0
+loadBarFill.Parent = loadBarBg
+local loadFillCorner = Instance.new("UICorner")
+loadFillCorner.CornerRadius = UDim.new(1, 0)
+loadFillCorner.Parent = loadBarFill
+
+local loadPercent = Instance.new("TextLabel")
+loadPercent.Size = UDim2.new(1, -20, 0, 20)
+loadPercent.Position = UDim2.new(0, 10, 0, 80)
+loadPercent.BackgroundTransparency = 1
+loadPercent.Text = "0%"
+loadPercent.TextColor3 = Color3.fromRGB(200, 200, 200)
+loadPercent.Font = Enum.Font.GothamBold
+loadPercent.TextSize = 14
+loadPercent.Parent = loadFrame
+
+task.spawn(function()
+    for i = 0, 100 do
+        loadBarFill:TweenSize(UDim2.new(i / 100, 0, 1, 0), Enum.EasingDirection.Out, Enum.EasingStyle.Quad, 0.02, true)
+        loadPercent.Text = i .. "%"
+        task.wait(0.02)
+    end
+    task.wait(0.3)
+    loadingGui:Destroy()
+end)
 
 local function getKeyName(key)
     if not key then return "None" end
@@ -558,12 +636,22 @@ local function isPallet(obj)
     if not obj:IsA("Model") and not obj:IsA("BasePart") then return false end
     local n = obj.Name:lower()
     if not (n:find("pallet") or n:find("palka") or n:find("паллет")) then return false end
-    if obj:IsA("Model") and not obj.PrimaryPart then
-        for _, child in ipairs(obj:GetChildren()) do
-            if child:IsA("BasePart") then return true end
+    local part
+    if obj:IsA("Model") then
+        if obj.PrimaryPart then
+            part = obj.PrimaryPart
+        else
+            for _, child in ipairs(obj:GetChildren()) do
+                if child:IsA("BasePart") then part = child break end
+            end
         end
-        return false
+    else
+        part = obj
     end
+    if not part then return false end
+    local size = part.Size
+    local volume = size.X * size.Y * size.Z
+    if volume < 20 then return false end
     return true
 end
 
@@ -571,12 +659,6 @@ local function isGenerator(obj)
     if not obj:IsA("Model") and not obj:IsA("BasePart") then return false end
     local n = obj.Name:lower()
     if not (n:find("generator") or n:find("generat") or n:find("генератор")) then return false end
-    if obj:IsA("Model") and not obj.PrimaryPart then
-        for _, child in ipairs(obj:GetChildren()) do
-            if child:IsA("BasePart") then return true end
-        end
-        return false
-    end
     return true
 end
 
@@ -608,6 +690,28 @@ local function clearGeneratorESP()
     for obj, esp in pairs(generatorESP) do
         if esp.h then esp.h:Destroy() end
         generatorESP[obj] = nil
+    end
+end
+
+local function scanPallets()
+    if tick() - lastPalletScan < SCAN_INTERVAL then return end
+    lastPalletScan = tick()
+    palletCache = {}
+    for _, obj in ipairs(Workspace:GetDescendants()) do
+        if isPallet(obj) then
+            table.insert(palletCache, obj)
+        end
+    end
+end
+
+local function scanGenerators()
+    if tick() - lastGeneratorScan < SCAN_INTERVAL then return end
+    lastGeneratorScan = tick()
+    generatorCache = {}
+    for _, obj in ipairs(Workspace:GetDescendants()) do
+        if isGenerator(obj) then
+            table.insert(generatorCache, obj)
+        end
     end
 end
 
@@ -655,17 +759,15 @@ local function updatePalletESP()
         clearPalletESP()
         return
     end
+    scanPallets()
     for obj, esp in pairs(palletESP) do
         if not obj.Parent then
             esp.h:Destroy()
             palletESP[obj] = nil
-        else
-            esp.h.FillColor = PALLET_COLOR
-            esp.h.OutlineColor = PALLET_COLOR
         end
     end
-    for _, obj in ipairs(Workspace:GetDescendants()) do
-        if isPallet(obj) and not palletESP[obj] then
+    for _, obj in ipairs(palletCache) do
+        if not palletESP[obj] then
             local h = createHighlight(obj, PALLET_COLOR)
             palletESP[obj] = { h = h }
         end
@@ -677,17 +779,15 @@ local function updateGeneratorESP()
         clearGeneratorESP()
         return
     end
+    scanGenerators()
     for obj, esp in pairs(generatorESP) do
         if not obj.Parent then
             esp.h:Destroy()
             generatorESP[obj] = nil
-        else
-            esp.h.FillColor = GENERATOR_COLOR
-            esp.h.OutlineColor = GENERATOR_COLOR
         end
     end
-    for _, obj in ipairs(Workspace:GetDescendants()) do
-        if isGenerator(obj) and not generatorESP[obj] then
+    for _, obj in ipairs(generatorCache) do
+        if not generatorESP[obj] then
             local h = createHighlight(obj, GENERATOR_COLOR)
             generatorESP[obj] = { h = h }
         end
@@ -695,33 +795,23 @@ local function updateGeneratorESP()
 end
 
 local function getKillerAttacking()
+    local myRoot = LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("HumanoidRootPart")
+    if not myRoot then return false end
     for _, plr in ipairs(Players:GetPlayers()) do
         if plr == LocalPlayer then continue end
         local char = plr.Character
         if not char then continue end
+        local root = char:FindFirstChild("HumanoidRootPart")
         local hum = char:FindFirstChildOfClass("Humanoid")
-        if not hum or hum.Health <= 0 then continue end
+        if not (root and hum and hum.Health > 0) then continue end
         if not isKiller(plr) then continue end
-
-        local myRoot = LocalPlayer.Character
-            and LocalPlayer.Character:FindFirstChild("HumanoidRootPart")
-        local killerRoot = char:FindFirstChild("HumanoidRootPart")
-
-        if myRoot and killerRoot then
-            local dist = (myRoot.Position - killerRoot.Position).Magnitude
-            if dist <= PARRY_RADIUS then
-                local state = hum:GetState()
-                if state == Enum.HumanoidStateType.Attacking
-                    or state == Enum.HumanoidStateType.Lunge
-                    or state == Enum.HumanoidStateType.Physics then
-                    return true
-                end
-                for _, t in ipairs(hum:GetPlayingAnimationTracks()) do
-                    local animName = t.Animation.Name:lower()
-                    if animName:find("attack") or animName:find("swing") or animName:find("lunge") then
-                        return true
-                    end
-                end
+        local dist = (myRoot.Position - root.Position).Magnitude
+        if dist <= PARRY_RADIUS then
+            local state = hum:GetState()
+            if state == Enum.HumanoidStateType.Attacking
+                or state == Enum.HumanoidStateType.Lunge
+                or state == Enum.HumanoidStateType.Physics then
+                return true
             end
         end
     end
@@ -746,7 +836,7 @@ table.insert(loops, task.spawn(function()
 end))
 
 table.insert(loops, task.spawn(function()
-    while task.wait(0.1) do
+    while task.wait(0.15) do
         if AUTO_PARRY then
             if getKillerAttacking() then
                 local now = tick()
@@ -835,18 +925,16 @@ track(RunService.Stepped:Connect(function(_, dt)
         local now = tick()
         local wDown = UserInputService:IsKeyDown(Enum.KeyCode.W)
         local sDown = UserInputService:IsKeyDown(Enum.KeyCode.S)
-        if (wDown or sDown) and now - moonwalkLastSwitch >= MOONWALK_INTERVAL then
-            moonwalkLastSwitch = now
-            if moonwalkSide == "A" then
-                VirtualInputManager:SendKeyEvent(true, Enum.KeyCode.D, false, game)
+        if wDown or sDown then
+            if now - moonwalkLastSide >= MOONWALK_SWITCH_TIME then
+                moonwalkLastSide = now
+                moonwalkSide = (moonwalkSide == "A") and "D" or "A"
+            end
+            if now - moonwalkLastSwitch >= MOONWALK_INTERVAL then
+                moonwalkLastSwitch = now
+                VirtualInputManager:SendKeyEvent(true, Enum.KeyCode[moonwalkSide], false, game)
                 task.wait(0.01)
-                VirtualInputManager:SendKeyEvent(false, Enum.KeyCode.D, false, game)
-                moonwalkSide = "D"
-            else
-                VirtualInputManager:SendKeyEvent(true, Enum.KeyCode.A, false, game)
-                task.wait(0.01)
-                VirtualInputManager:SendKeyEvent(false, Enum.KeyCode.A, false, game)
-                moonwalkSide = "A"
+                VirtualInputManager:SendKeyEvent(false, Enum.KeyCode[moonwalkSide], false, game)
             end
         end
     end
@@ -988,8 +1076,11 @@ createCollapsible(movementPage, "Auto Moonwalk", function(content)
         MOONWALK_ENABLED = v
         updateBindLabel("moonwalk", v)
     end)
-    createSlider(content, "Moonwalk Interval", 1, 10, 5, function(val)
+    createSlider(content, "Spam Interval", 1, 10, 5, function(val)
         MOONWALK_INTERVAL = val / 100
+    end)
+    createSlider(content, "Switch Side Time", 1, 30, 10, function(val)
+        MOONWALK_SWITCH_TIME = val / 10
     end)
 end)
 
