@@ -26,9 +26,9 @@ local MOONWALK_ENABLED = false
 local MOONWALK_SPEED = 16
 local MOONWALK_SIDE_INTERVAL = 1
 local MOONWALK_TURN_SPEED = 6
-local MOONWALK_ANGLE_STEP = 20
+local MOONWALK_ANGLE_STEP = 30
 local moonwalkLastSide = 0
-local moonwalkSide = -1
+local moonwalkSide = 1
 local moonwalkTargetAngle = 0
 local moonwalkCurrentAngle = 0
 
