@@ -16,6 +16,11 @@ local CONFIG = {
     espDistance = true,
     autoParry = false,
     parryRadius = 15,
+    parryKey = Enum.KeyCode.Q,
+    parryReactionMs = 30,
+    parryWindowStart = 0.1,
+    parryWindowEnd = 0.4,
+    parryPriority = "nearest",
     fly = false,
     flySpeed = 50,
     noclip = false,
@@ -39,8 +44,12 @@ local ESP_GENERATOR = CONFIG.espGenerator
 local ESP_DISTANCE = CONFIG.espDistance
 local AUTO_PARRY = CONFIG.autoParry
 local PARRY_RADIUS = CONFIG.parryRadius
-local PARRY_KEY = Enum.KeyCode.Q
-local PARRY_COOLDOWN = 0.3
+local PARRY_KEY = CONFIG.parryKey
+local PARRY_REACTION_MS = CONFIG.parryReactionMs
+local PARRY_WINDOW_START = CONFIG.parryWindowStart
+local PARRY_WINDOW_END = CONFIG.parryWindowEnd
+local PARRY_PRIORITY = CONFIG.parryPriority
+local PARRY_COOLDOWN = 0.4
 local lastParry = 0
 
 local SPEED_ENABLED = CONFIG.speed
@@ -111,6 +120,8 @@ local BTN_DANGER = Color3.fromRGB(140, 40, 40)
 local BTN_SUCCESS = Color3.fromRGB(40, 130, 60)
 local BTN_INFO = Color3.fromRGB(40, 80, 140)
 
+local ATTACK_ANIM_KEYWORDS = {"attack", "swing", "slash", "lunge", "hit", "punch", "strike", "kick", "stab", "sword"}
+
 local function ensureConfigDir()
     if not (isfolder and makefolder) then return end
     if not isfolder(CONFIG_DIR) then
@@ -150,6 +161,10 @@ local function saveConfig()
         espDistance = ESP_DISTANCE,
         autoParry = AUTO_PARRY,
         parryRadius = PARRY_RADIUS,
+        parryReactionMs = PARRY_REACTION_MS,
+        parryWindowStart = PARRY_WINDOW_START,
+        parryWindowEnd = PARRY_WINDOW_END,
+        parryPriority = PARRY_PRIORITY,
         fly = FLY_ENABLED,
         flySpeed = FLY_SPEED,
         noclip = NOCLIP_ENABLED,
@@ -180,6 +195,10 @@ local function applyConfigData(data)
     ESP_DISTANCE = data.espDistance ~= nil and data.espDistance or ESP_DISTANCE
     AUTO_PARRY = data.autoParry or AUTO_PARRY
     PARRY_RADIUS = data.parryRadius or PARRY_RADIUS
+    PARRY_REACTION_MS = data.parryReactionMs or PARRY_REACTION_MS
+    PARRY_WINDOW_START = data.parryWindowStart or PARRY_WINDOW_START
+    PARRY_WINDOW_END = data.parryWindowEnd or PARRY_WINDOW_END
+    PARRY_PRIORITY = data.parryPriority or PARRY_PRIORITY
     FLY_ENABLED = data.fly or FLY_ENABLED
     FLY_SPEED = data.flySpeed or FLY_SPEED
     NOCLIP_ENABLED = data.noclip or NOCLIP_ENABLED
@@ -219,6 +238,10 @@ local function resetConfig()
     ESP_DISTANCE = true
     AUTO_PARRY = false
     PARRY_RADIUS = 15
+    PARRY_REACTION_MS = 30
+    PARRY_WINDOW_START = 0.1
+    PARRY_WINDOW_END = 0.4
+    PARRY_PRIORITY = "nearest"
     FLY_ENABLED = false
     FLY_SPEED = 50
     NOCLIP_ENABLED = false
@@ -578,15 +601,6 @@ local bindActions = {
     end,
 }
 
-local function addHoverEffect(btn, baseColor)
-    btn.MouseEnter:Connect(function()
-        btn.BackgroundColor3 = BTN_HOVER
-    end)
-    btn.MouseLeave:Connect(function()
-        btn.BackgroundColor3 = baseColor
-    end)
-end
-
 local function createStateButton(parent, text, getState, setState)
     local btn = Instance.new("TextButton")
     btn.Size = UDim2.new(0.9, 0, 0, 36)
@@ -798,6 +812,86 @@ local function createSectionLabel(parent, text)
     label.TextSize = 12
     label.TextXAlignment = Enum.TextXAlignment.Left
     label.Parent = parent
+end
+
+local function createDropdown(parent, text, options, defaultOption, callback)
+    local container = Instance.new("Frame")
+    container.Size = UDim2.new(0.9, 0, 0, 36)
+    container.Position = UDim2.new(0.05, 0, 0, 0)
+    container.BackgroundColor3 = BTN_NEUTRAL
+    container.BorderSizePixel = 0
+    container.Parent = parent
+    local cc = Instance.new("UICorner")
+    cc.CornerRadius = UDim.new(0, 8)
+    cc.Parent = container
+    local cs = Instance.new("UIStroke")
+    cs.Color = Color3.fromRGB(70, 70, 70)
+    cs.Thickness = 1
+    cs.Parent = container
+
+    local btn = Instance.new("TextButton")
+    btn.Size = UDim2.new(1, 0, 1, 0)
+    btn.BackgroundTransparency = 1
+    btn.Text = text .. ": " .. defaultOption .. "  ▼"
+    btn.TextColor3 = Color3.fromRGB(255, 255, 255)
+    btn.Font = Enum.Font.GothamBold
+    btn.TextSize = 12
+    btn.Parent = container
+
+    local list = Instance.new("Frame")
+    list.Size = UDim2.new(1, 0, 0, #options * 30)
+    list.Position = UDim2.new(0, 0, 1, 2)
+    list.BackgroundColor3 = Color3.fromRGB(25, 25, 25)
+    list.BorderSizePixel = 0
+    list.Visible = false
+    list.ZIndex = 5
+    list.Parent = container
+    local lc = Instance.new("UICorner")
+    lc.CornerRadius = UDim.new(0, 8)
+    lc.Parent = list
+    local ls = Instance.new("UIStroke")
+    ls.Color = Color3.fromRGB(80, 80, 80)
+    ls.Thickness = 1
+    ls.Parent = list
+
+    local layout = Instance.new("UIListLayout")
+    layout.Padding = UDim.new(0, 2)
+    layout.Parent = list
+
+    local current = defaultOption
+    for _, opt in ipairs(options) do
+        local ob = Instance.new("TextButton")
+        ob.Size = UDim2.new(1, 0, 0, 28)
+        ob.BackgroundColor3 = BTN_NEUTRAL
+        ob.Text = opt
+        ob.TextColor3 = Color3.fromRGB(255, 255, 255)
+        ob.Font = Enum.Font.GothamBold
+        ob.TextSize = 12
+        ob.Parent = list
+        local oc = Instance.new("UICorner")
+        oc.CornerRadius = UDim.new(0, 6)
+        oc.Parent = ob
+        ob.MouseButton1Click:Connect(function()
+            playClickSound()
+            current = opt
+            btn.Text = text .. ": " .. opt .. "  ▼"
+            list.Visible = false
+            callback(opt)
+        end)
+        ob.MouseEnter:Connect(function()
+            ob.BackgroundColor3 = BTN_HOVER
+        end)
+        ob.MouseLeave:Connect(function()
+            ob.BackgroundColor3 = BTN_NEUTRAL
+        end)
+    end
+
+    btn.MouseButton1Click:Connect(function()
+        playClickSound()
+        list.Visible = not list.Visible
+    end)
+
+    return container
 end
 
 local function createBindButton(parent, id, text)
@@ -1140,9 +1234,28 @@ local function updateGeneratorESP()
     end
 end
 
-local function getKillerAttacking()
+local function isAttackAnimation(name)
+    local lower = name:lower()
+    for _, kw in ipairs(ATTACK_ANIM_KEYWORDS) do
+        if lower:find(kw) then return true end
+    end
+    return false
+end
+
+local function getTrackTimeToHit(track)
+    local timePos = track.TimePosition
+    local length = track.Length
+    if length <= 0 then return nil end
+    if timePos < PARRY_WINDOW_START or timePos > PARRY_WINDOW_END then
+        return nil
+    end
+    return timePos
+end
+
+local function getParryTarget()
     local myRoot = LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("HumanoidRootPart")
-    if not myRoot then return false end
+    if not myRoot then return nil end
+    local bestPlr, bestRoot, bestDist, bestPriority = nil, nil, math.huge, -1
     for _, plr in ipairs(Players:GetPlayers()) do
         if plr == LocalPlayer then continue end
         local char = plr.Character
@@ -1152,16 +1265,57 @@ local function getKillerAttacking()
         if not (root and hum and hum.Health > 0) then continue end
         if not isKiller(plr) then continue end
         local dist = (myRoot.Position - root.Position).Magnitude
-        if dist <= PARRY_RADIUS then
-            local state = hum:GetState()
-            if state == Enum.HumanoidStateType.Attacking
-                or state == Enum.HumanoidStateType.Lunge
-                or state == Enum.HumanoidStateType.Physics then
-                return true
+        if dist > PARRY_RADIUS then continue end
+
+        local priority = 0
+        if PARRY_PRIORITY == "nearest" then
+            priority = 1000 - dist
+        elseif PARRY_PRIORITY == "attacking" then
+            priority = 0
+            for _, track in ipairs(hum:GetPlayingAnimationTracks()) do
+                if isAttackAnimation(track.Animation.Name) then
+                    priority = 1000
+                    break
+                end
+            end
+        end
+
+        if priority > bestPriority or (priority == bestPriority and dist < bestDist) then
+            bestPriority = priority
+            bestDist = dist
+            bestPlr = plr
+            bestRoot = root
+        end
+    end
+    return bestPlr, bestRoot
+end
+
+local function tryParry()
+    local now = tick()
+    if now - lastParry < PARRY_COOLDOWN then return end
+    local plr, root = getParryTarget()
+    if not plr then return end
+
+    local char = plr.Character
+    if not char then return end
+    local hum = char:FindFirstChildOfClass("Humanoid")
+    if not hum then return end
+
+    for _, track in ipairs(hum:GetPlayingAnimationTracks()) do
+        if isAttackAnimation(track.Animation.Name) then
+            local hitTime = getTrackTimeToHit(track)
+            if hitTime then
+                if PARRY_REACTION_MS > 0 then
+                    task.wait(PARRY_REACTION_MS / 1000)
+                end
+                lastParry = tick()
+                VirtualInputManager:SendKeyEvent(true, PARRY_KEY, false, game)
+                task.wait(0.05)
+                VirtualInputManager:SendKeyEvent(false, PARRY_KEY, false, game)
+                return
             end
         end
     end
-    return false
 end
 
 track(RunService.RenderStepped:Connect(function()
@@ -1182,17 +1336,9 @@ table.insert(loops, task.spawn(function()
 end))
 
 table.insert(loops, task.spawn(function()
-    while task.wait(0.15) do
+    while task.wait(0.02) do
         if AUTO_PARRY then
-            if getKillerAttacking() then
-                local now = tick()
-                if now - lastParry >= PARRY_COOLDOWN then
-                    lastParry = now
-                    VirtualInputManager:SendKeyEvent(true, PARRY_KEY, false, game)
-                    task.wait(0.05)
-                    VirtualInputManager:SendKeyEvent(false, PARRY_KEY, false, game)
-                end
-            end
+            tryParry()
         end
     end
 end))
@@ -1449,8 +1595,24 @@ createCollapsible(survivorPage, "Auto Parry", function(content)
         updateBindLabel("autoParry", v)
         saveConfig()
     end)
-    createSlider(content, "Parry Radius", 5, 30, PARRY_RADIUS, function(val)
+    createSlider(content, "Parry Range", 5, 30, PARRY_RADIUS, function(val)
         PARRY_RADIUS = val
+        saveConfig()
+    end)
+    createSlider(content, "Reaction Delay (ms)", 0, 200, PARRY_REACTION_MS, function(val)
+        PARRY_REACTION_MS = val
+        saveConfig()
+    end)
+    createSlider(content, "Window Start (x0.01s)", 1, 50, math.floor(PARRY_WINDOW_START * 100), function(val)
+        PARRY_WINDOW_START = val / 100
+        saveConfig()
+    end)
+    createSlider(content, "Window End (x0.01s)", 5, 100, math.floor(PARRY_WINDOW_END * 100), function(val)
+        PARRY_WINDOW_END = val / 100
+        saveConfig()
+    end)
+    createDropdown(content, "Priority", {"nearest", "attacking"}, PARRY_PRIORITY, function(opt)
+        PARRY_PRIORITY = opt
         saveConfig()
     end)
 end)
