@@ -316,6 +316,116 @@ local function createToggle(parent, text, callback)
     return btn
 end
 
+-- Новая функция: кнопка-состояние с автоматическим [ON]/[OFF]
+local function createStateButton(parent, text, getState, setState)
+    local btn = Instance.new("TextButton")
+    btn.Size = UDim2.new(1, 0, 0, 36)
+    btn.Position = UDim2.new(0, 0, 0, 0)
+    btn.BackgroundColor3 = Color3.fromRGB(40, 40, 40)
+    btn.Text = text .. "   [" .. (getState() and "ON" or "OFF") .. "]"
+    btn.TextColor3 = Color3.fromRGB(255, 255, 255)
+    btn.Font = Enum.Font.GothamBold
+    btn.TextSize = 13
+    btn.Parent = parent
+    local c = Instance.new("UICorner")
+    c.CornerRadius = UDim.new(0, 8)
+    c.Parent = btn
+    local s = Instance.new("UIStroke")
+    s.Color = getState() and Color3.fromRGB(255, 255, 255) or Color3.fromRGB(80, 80, 80)
+    s.Thickness = 1
+    s.Parent = btn
+
+    local function refresh()
+        local state = getState()
+        btn.Text = text .. "   [" .. (state and "ON" or "OFF") .. "]"
+        if state then
+            btn.BackgroundColor3 = Color3.fromRGB(60, 60, 60)
+            s.Color = Color3.fromRGB(255, 255, 255)
+        else
+            btn.BackgroundColor3 = Color3.fromRGB(40, 40, 40)
+            s.Color = Color3.fromRGB(80, 80, 80)
+        end
+    end
+
+    btn.MouseButton1Click:Connect(function()
+        setState(not getState())
+        refresh()
+    end)
+
+    refresh()
+    return btn, refresh
+end
+
+-- Новая функция: раскрывающийся заголовок с содержимым
+local function createCollapsible(parent, titleText, buildContent)
+    local container = Instance.new("Frame")
+    container.Size = UDim2.new(0.95, 0, 0, 40)
+    container.Position = UDim2.new(0.025, 0, 0, 0)
+    container.BackgroundColor3 = Color3.fromRGB(30, 30, 30)
+    container.BorderSizePixel = 0
+    container.Parent = parent
+    local cc = Instance.new("UICorner")
+    cc.CornerRadius = UDim.new(0, 10)
+    cc.Parent = container
+    local cs = Instance.new("UIStroke")
+    cs.Color = Color3.fromRGB(80, 80, 80)
+    cs.Thickness = 1
+    cs.Parent = container
+
+    local btn = Instance.new("TextButton")
+    btn.Size = UDim2.new(1, 0, 1, 0)
+    btn.BackgroundTransparency = 1
+    btn.Text = titleText .. "  ▼"
+    btn.TextColor3 = Color3.fromRGB(255, 255, 255)
+    btn.Font = Enum.Font.GothamBold
+    btn.TextSize = 14
+    btn.TextXAlignment = Enum.TextXAlignment.Left
+    btn.Parent = container
+    local btnPadding = Instance.new("UIPadding")
+    btnPadding.PaddingLeft = UDim.new(0, 12)
+    btnPadding.Parent = btn
+
+    local expanded = false
+    local content = Instance.new("Frame")
+    content.Size = UDim2.new(0.95, 0, 0, 80)
+    content.Position = UDim2.new(0.025, 0, 0, 0)
+    content.BackgroundColor3 = Color3.fromRGB(25, 25, 25)
+    content.BorderSizePixel = 0
+    content.Visible = false
+    content.Parent = parent
+    local conCorner = Instance.new("UICorner")
+    conCorner.CornerRadius = UDim.new(0, 10)
+    conCorner.Parent = content
+    local conStroke = Instance.new("UIStroke")
+    conStroke.Color = Color3.fromRGB(80, 80, 80)
+    conStroke.Thickness = 1
+    conStroke.Parent = content
+
+    local conLayout = Instance.new("UIListLayout")
+    conLayout.Padding = UDim.new(0, 6)
+    conLayout.SortOrder = Enum.SortOrder.LayoutOrder
+    conLayout.HorizontalAlignment = Enum.HorizontalAlignment.Center
+    conLayout.Parent = content
+    local conPadding = Instance.new("UIPadding")
+    conPadding.PaddingTop = UDim.new(0, 6)
+    conPadding.PaddingBottom = UDim.new(0, 6)
+    conPadding.Parent = content
+
+    buildContent(content)
+
+    btn.MouseButton1Click:Connect(function()
+        expanded = not expanded
+        content.Visible = expanded
+        if expanded then
+            btn.Text = titleText .. "  ▲"
+        else
+            btn.Text = titleText .. "  ▼"
+        end
+    end)
+
+    return container, content, btn
+end
+
 local function createColorButton(parent, text, callback)
     local btn = Instance.new("TextButton")
     btn.Size = UDim2.new(1, 0, 0, 32)
@@ -356,9 +466,9 @@ end
 
 local function createSlider(parent, text, minVal, maxVal, defaultVal, callback)
     local container = Instance.new("Frame")
-    container.Size = UDim2.new(1, 0, 0, 50)
-    container.Position = UDim2.new(0, 0, 0, 0)
-    container.BackgroundColor3 = Color3.fromRGB(30, 30, 30)
+    container.Size = UDim2.new(0.95, 0, 0, 50)
+    container.Position = UDim2.new(0.025, 0, 0, 0)
+    container.BackgroundColor3 = Color3.fromRGB(40, 40, 40)
     container.BorderSizePixel = 0
     container.Parent = parent
     local cc = Instance.new("UICorner")
@@ -871,26 +981,23 @@ createSlider(survivorPage, "Parry Radius", 5, 30, PARRY_RADIUS, function(val)
     PARRY_RADIUS = val
 end)
 
-createToggle(movementPage, "Speed", function(state)
-    SPEED_ENABLED = state
-    updateBindLabel("speed", state)
-end)
-createToggle(movementPage, "Speed Off/On", function(state)
-    SPEED_ENABLED = state
-    updateBindLabel("speed", state)
-end)
-createSlider(movementPage, "Speed Value", 16, 200, SPEED_VALUE, function(val)
-    SPEED_VALUE = val
+createCollapsible(movementPage, "Speed", function(content)
+    createStateButton(content, "Speed", function() return SPEED_ENABLED end, function(v)
+        SPEED_ENABLED = v
+        updateBindLabel("speed", v)
+    end)
+    createSlider(content, "Speed Value", 16, 200, SPEED_VALUE, function(val)
+        SPEED_VALUE = val
+    end)
 end)
 
-createToggle(movementPage, "Jump", function(state)
-    JUMP_ENABLED = state
-end)
-createToggle(movementPage, "Jump Off/On", function(state)
-    JUMP_ENABLED = state
-end)
-createSlider(movementPage, "Jump Value", 50, 300, JUMP_VALUE, function(val)
-    JUMP_VALUE = val
+createCollapsible(movementPage, "Jump", function(content)
+    createStateButton(content, "Jump", function() return JUMP_ENABLED end, function(v)
+        JUMP_ENABLED = v
+    end)
+    createSlider(content, "Jump Value", 50, 300, JUMP_VALUE, function(val)
+        JUMP_VALUE = val
+    end)
 end)
 
 createToggle(movementPage, "Noclip", function(state)
