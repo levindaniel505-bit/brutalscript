@@ -32,8 +32,6 @@ local CONFIG = {
     moonwalkSpeed = 16,
     moonwalkSideInterval = 1,
     moonwalkTurnSpeed = 6,
-    noFall = false,
-    noSlowed = false,
     fovEnabled = false,
     fovValue = 70,
 }
@@ -70,9 +68,6 @@ local moonwalkTargetAngle = 0
 local moonwalkCurrentAngle = 0
 local moonwalkGyro = nil
 local moonwalkVel = nil
-
-local NO_FALL_ENABLED = CONFIG.noFall
-local NO_SLOWED_ENABLED = CONFIG.noSlowed
 
 local FOV_ENABLED = CONFIG.fovEnabled
 local FOV_VALUE = CONFIG.fovValue
@@ -176,8 +171,6 @@ local function saveConfig()
         moonwalkSpeed = MOONWALK_SPEED,
         moonwalkSideInterval = MOONWALK_SIDE_INTERVAL,
         moonwalkTurnSpeed = MOONWALK_TURN_SPEED,
-        noFall = NO_FALL_ENABLED,
-        noSlowed = NO_SLOWED_ENABLED,
         fovEnabled = FOV_ENABLED,
         fovValue = FOV_VALUE,
     }
@@ -210,8 +203,6 @@ local function applyConfigData(data)
     MOONWALK_SPEED = data.moonwalkSpeed or MOONWALK_SPEED
     MOONWALK_SIDE_INTERVAL = data.moonwalkSideInterval or MOONWALK_SIDE_INTERVAL
     MOONWALK_TURN_SPEED = data.moonwalkTurnSpeed or MOONWALK_TURN_SPEED
-    NO_FALL_ENABLED = data.noFall or NO_FALL_ENABLED
-    NO_SLOWED_ENABLED = data.noSlowed or NO_SLOWED_ENABLED
     FOV_ENABLED = data.fovEnabled or FOV_ENABLED
     FOV_VALUE = data.fovValue or FOV_VALUE
 end
@@ -253,8 +244,6 @@ local function resetConfig()
     MOONWALK_SPEED = 16
     MOONWALK_SIDE_INTERVAL = 1
     MOONWALK_TURN_SPEED = 6
-    NO_FALL_ENABLED = false
-    NO_SLOWED_ENABLED = false
     FOV_ENABLED = false
     FOV_VALUE = 70
     saveConfig()
@@ -1343,36 +1332,6 @@ table.insert(loops, task.spawn(function()
     end
 end))
 
-table.insert(loops, task.spawn(function()
-    while task.wait(0.05) do
-        local char = LocalPlayer.Character
-        local hum = char and char:FindFirstChildOfClass("Humanoid")
-        local root = char and char:FindFirstChild("HumanoidRootPart")
-        if hum and root then
-            if NO_FALL_ENABLED then
-                if root.Velocity.Y < -20 then
-                    root.Velocity = Vector3.new(root.Velocity.X, 0, root.Velocity.Z)
-                    root.CFrame = root.CFrame + Vector3.new(0, 1, 0)
-                end
-                if hum:GetState() == Enum.HumanoidStateType.Freefall then
-                    local ray = Ray.new(root.Position, Vector3.new(0, -10, 0))
-                    local hit, pos = Workspace:FindPartOnRay(ray, char)
-                    if hit then
-                        root.CFrame = CFrame.new(pos + Vector3.new(0, 3, 0))
-                    end
-                end
-            end
-            if NO_SLOWED_ENABLED then
-                if not SPEED_ENABLED then
-                    if hum.WalkSpeed < 16 then
-                        hum.WalkSpeed = 16
-                    end
-                end
-            end
-        end
-    end
-end))
-
 track(RunService.Stepped:Connect(function(_, dt)
     local char = LocalPlayer.Character
     local hum = char and char:FindFirstChildOfClass("Humanoid")
@@ -1613,20 +1572,6 @@ createCollapsible(survivorPage, "Auto Parry", function(content)
     end)
     createDropdown(content, "Priority", {"nearest", "attacking"}, PARRY_PRIORITY, function(opt)
         PARRY_PRIORITY = opt
-        saveConfig()
-    end)
-end)
-
-createCollapsible(survivorPage, "No Fall", function(content)
-    createStateButton(content, "No Fall", function() return NO_FALL_ENABLED end, function(v)
-        NO_FALL_ENABLED = v
-        saveConfig()
-    end)
-end)
-
-createCollapsible(survivorPage, "No Slowed", function(content)
-    createStateButton(content, "No Slowed", function() return NO_SLOWED_ENABLED end, function(v)
-        NO_SLOWED_ENABLED = v
         saveConfig()
     end)
 end)
