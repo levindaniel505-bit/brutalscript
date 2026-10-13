@@ -23,7 +23,9 @@ local NOCLIP_ENABLED = false
 local FLY_ENABLED = false
 local FLY_SPEED = 50
 local MOONWALK_ENABLED = false
-local MOONWALK_SPEED = 32
+local MOONWALK_INTERVAL = 0.05
+local moonwalkLastSwitch = 0
+local moonwalkSide = "A"
 
 local FOV_ENABLED = false
 local FOV_VALUE = 70
@@ -760,7 +762,6 @@ table.insert(loops, task.spawn(function()
 end))
 
 local flyVelocity = nil
-local moonwalkVelocity = nil
 
 track(RunService.Stepped:Connect(function(_, dt)
     local char = LocalPlayer.Character
@@ -830,28 +831,23 @@ track(RunService.Stepped:Connect(function(_, dt)
         end
     end
 
-    if MOONWALK_ENABLED and hum and root then
-        local moveDir = hum.MoveDirection
-        if moveDir.Magnitude > 0 then
-            local backward = -moveDir
-            hum.WalkSpeed = MOONWALK_SPEED
-            if not moonwalkVelocity or not moonwalkVelocity.Parent then
-                moonwalkVelocity = Instance.new("BodyVelocity")
-                moonwalkVelocity.MaxForce = Vector3.new(1e5, 0, 1e5)
-                moonwalkVelocity.P = 1e4
-                moonwalkVelocity.Parent = root
+    if MOONWALK_ENABLED then
+        local now = tick()
+        local wDown = UserInputService:IsKeyDown(Enum.KeyCode.W)
+        local sDown = UserInputService:IsKeyDown(Enum.KeyCode.S)
+        if (wDown or sDown) and now - moonwalkLastSwitch >= MOONWALK_INTERVAL then
+            moonwalkLastSwitch = now
+            if moonwalkSide == "A" then
+                VirtualInputManager:SendKeyEvent(true, Enum.KeyCode.D, false, game)
+                task.wait(0.01)
+                VirtualInputManager:SendKeyEvent(false, Enum.KeyCode.D, false, game)
+                moonwalkSide = "D"
+            else
+                VirtualInputManager:SendKeyEvent(true, Enum.KeyCode.A, false, game)
+                task.wait(0.01)
+                VirtualInputManager:SendKeyEvent(false, Enum.KeyCode.A, false, game)
+                moonwalkSide = "A"
             end
-            moonwalkVelocity.Velocity = Vector3.new(backward.X * MOONWALK_SPEED, 0, backward.Z * MOONWALK_SPEED)
-        else
-            hum.WalkSpeed = SPEED_ENABLED and SPEED_VALUE or 16
-            if moonwalkVelocity then
-                moonwalkVelocity:Destroy()
-                moonwalkVelocity = nil
-            end
-        end
-    else        if moonwalkVelocity then
-            moonwalkVelocity:Destroy()
-            moonwalkVelocity = nil
         end
     end
 end))
@@ -992,8 +988,8 @@ createCollapsible(movementPage, "Auto Moonwalk", function(content)
         MOONWALK_ENABLED = v
         updateBindLabel("moonwalk", v)
     end)
-    createSlider(content, "Moonwalk Speed", 16, 80, MOONWALK_SPEED, function(val)
-        MOONWALK_SPEED = val
+    createSlider(content, "Moonwalk Interval", 1, 10, 5, function(val)
+        MOONWALK_INTERVAL = val / 100
     end)
 end)
 
