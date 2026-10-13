@@ -960,7 +960,7 @@ track(RunService.Stepped:Connect(function(_, dt)
                 moonwalkSide = -moonwalkSide
             end
 
-            local targetAngle = 45 * moonwalkSide
+            local targetAngle = 30 * moonwalkSide
             moonwalkCurrentAngle = moonwalkCurrentAngle + (targetAngle - moonwalkCurrentAngle) * math.min(MOONWALK_TURN_SPEED * dt, 1)
 
             local baseDir = -moveVec
