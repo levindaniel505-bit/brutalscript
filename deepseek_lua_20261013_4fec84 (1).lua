@@ -87,7 +87,7 @@ minCorner.Parent = minimizeBtn
 local closeBtn = Instance.new("TextButton")
 closeBtn.Size = UDim2.new(0, 32, 0, 32)
 closeBtn.Position = UDim2.new(1, -40, 0.5, -16)
-closeBtn.BackgroundColor3 = Color3.fromRGB(45, 45, 45)
+closeBtn.BackgroundColor3 = Color3.fromRGB(180, 30, 30)
 closeBtn.Text = "×"
 closeBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
 closeBtn.Font = Enum.Font.GothamBold
@@ -114,19 +114,24 @@ local openStroke = Instance.new("UIStroke")
 openStroke.Color = Color3.fromRGB(255, 255, 255)
 openStroke.Thickness = 1.5
 openStroke.Parent = openBtn
+openBtn.Active = true
+openBtn.Draggable = true
 
 minimizeBtn.MouseButton1Click:Connect(function()
     mainFrame.Visible = false
     openBtn.Visible = true
+    openBtn.Text = "B"
+end)
+
+closeBtn.MouseButton1Click:Connect(function()
+    mainFrame.Visible = false
+    openBtn.Visible = true
+    openBtn.Text = "+"
 end)
 
 openBtn.MouseButton1Click:Connect(function()
     mainFrame.Visible = true
     openBtn.Visible = false
-end)
-
-closeBtn.MouseButton1Click:Connect(function()
-    screenGui:Destroy()
 end)
 
 local scroll = Instance.new("ScrollingFrame")
@@ -274,23 +279,45 @@ local function isKiller(plr)
     if not char then return false end
     local hum = char:FindFirstChildOfClass("Humanoid")
     if not hum then return false end
-    return hum.MaxHealth > 500
+    if hum.MaxHealth > 500 then return true end
+    if plr.Team and plr.Team.Name:lower():find("killer") then return true end
+    if plr:GetAttribute("Role") == "Killer" then return true end
+    return false
 end
 
 local function isPallet(obj)
     if not obj:IsA("Model") and not obj:IsA("BasePart") then return false end
     local n = obj.Name:lower()
-    return n == "pallet" or n == "palka" or n == "паллет"
+    if not (n:find("pallet") or n:find("palka") or n:find("паллет")) then return false end
+    if obj:IsA("Model") and not obj.PrimaryPart then
+        local hasPart = false
+        for _, child in ipairs(obj:GetChildren()) do
+            if child:IsA("BasePart") then hasPart = true break end
+        end
+        if not hasPart then return false end
+    end
+    return true
 end
 
 local function isGenerator(obj)
     if not obj:IsA("Model") and not obj:IsA("BasePart") then return false end
     local n = obj.Name:lower()
-    return n == "generator" or n == "генератор"
+    if not (n:find("generator") or n:find("generat") or n:find("генератор")) then return false end
+    if obj:IsA("Model") and not obj.PrimaryPart then
+        local hasPart = false
+        for _, child in ipairs(obj:GetChildren()) do
+            if child:IsA("BasePart") then hasPart = true break end
+        end
+        if not hasPart then return false end
+    end
+    return true
 end
 
 local function updateKillerESP()
-    if not ESP_KILLER then return end
+    if not ESP_KILLER then
+        clearKillerESP()
+        return
+    end
     for _, plr in ipairs(Players:GetPlayers()) do
         if plr == LocalPlayer then continue end
         local char = plr.Character
