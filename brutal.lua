@@ -994,7 +994,7 @@ track(RunService.Stepped:Connect(function(_, dt)
             if now - moonwalkLastSide >= MOONWALK_SIDE_INTERVAL then
                 moonwalkLastSide = now
                 moonwalkSide = -moonwalkSide
-                moonwalkTargetAngle = moonwalkTargetAngle + MOONWALK_ANGLE_STEP * moonwalkSide
+                moonwalkTargetAngle = MOONWALK_ANGLE_STEP * moonwalkSide
             end
 
             moonwalkCurrentAngle = moonwalkCurrentAngle + (moonwalkTargetAngle - moonwalkCurrentAngle) * math.min(MOONWALK_TURN_SPEED * dt, 1)
