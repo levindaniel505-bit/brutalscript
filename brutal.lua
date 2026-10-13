@@ -2604,14 +2604,22 @@ RunService.RenderStepped:Connect(function()
                     humanoid.WalkSpeed = Moonwalk.SlowSpeed
                 end
 
-                local look = cam.CFrame.LookVector
-                local flatLook = Vector3.new(look.X, 0, look.Z)
-                if flatLook.Magnitude > 0 then
-                    flatLook = flatLook.Unit
-                    local baseCF = CFrame.new(hrp.Position, hrp.Position - flatLook)
+                local moveDir = humanoid.MoveDirection
+
+                if moveDir.Magnitude > 0 then
+                    local baseCF = CFrame.new(hrp.Position, hrp.Position + moveDir)
                     local angle = math.sin(tick() * Moonwalk.SpamSpeed) * Moonwalk.Intensity
                     hrp.CFrame = baseCF * CFrame.Angles(0, math.rad(angle), 0)
-                    humanoid:Move(Vector3.new(0, 0, 1), true)
+                    humanoid:Move(moveDir, true)
+                else
+                    local look = cam.CFrame.LookVector
+                    local flatLook = Vector3.new(look.X, 0, look.Z)
+                    if flatLook.Magnitude > 0 then
+                        flatLook = flatLook.Unit
+                        local baseCF = CFrame.new(hrp.Position, hrp.Position + flatLook)
+                        local angle = math.sin(tick() * Moonwalk.SpamSpeed) * Moonwalk.Intensity
+                        hrp.CFrame = baseCF * CFrame.Angles(0, math.rad(angle), 0)
+                    end
                 end
             end
         end
