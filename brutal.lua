@@ -22,7 +22,6 @@ local JUMP_VALUE = 80
 local NOCLIP_ENABLED = false
 local FLY_ENABLED = false
 local FLY_SPEED = 50
-local INFINITE_JUMP = false
 
 local KILLER_COLOR = Color3.fromRGB(255, 0, 0)
 local PALLET_COLOR = Color3.fromRGB(255, 255, 255)
@@ -53,41 +52,12 @@ local BINDS = {
     speed = Enum.KeyCode.F7,
 }
 
-local bindActions = {
-    toggleMenu = function()
-        mainFrame.Visible = not mainFrame.Visible
-    end,
-    espKiller = function()
-        ESP_KILLER = not ESP_KILLER
-        updateBindLabel("espKiller", ESP_KILLER)
-    end,
-    espPallet = function()
-        ESP_PALLET = not ESP_PALLET
-        updateBindLabel("espPallet", ESP_PALLET)
-    end,
-    espGenerator = function()
-        ESP_GENERATOR = not ESP_GENERATOR
-        updateBindLabel("espGenerator", ESP_GENERATOR)
-    end,
-    autoParry = function()
-        AUTO_PARRY = not AUTO_PARRY
-        updateBindLabel("autoParry", AUTO_PARRY)
-    end,
-    fly = function()
-        FLY_ENABLED = not FLY_ENABLED
-        updateBindLabel("fly", FLY_ENABLED)
-    end,
-    noclip = function()
-        NOCLIP_ENABLED = not NOCLIP_ENABLED
-        updateBindLabel("noclip", NOCLIP_ENABLED)
-    end,
-    speed = function()
-        SPEED_ENABLED = not SPEED_ENABLED
-        updateBindLabel("speed", SPEED_ENABLED)
-    end,
-}
-
 local bindLabels = {}
+
+local function getKeyName(key)
+    if not key then return "None" end
+    return key.Name
+end
 
 local function saveBinds()
     if not writefile then return end
@@ -114,18 +84,6 @@ local function loadBinds()
     end)
 end
 
-local function getKeyName(key)
-    if not key then return "None" end
-    return key.Name
-end
-
-local function updateBindLabel(id, state)
-    local lbl = bindLabels[id]
-    if not lbl then return end
-    local status = state and " [ON]" or " [OFF]"
-    lbl.Text = id .. ": " .. getKeyName(BINDS[id]) .. status
-end
-
 local function track(conn)
     table.insert(connections, conn)
     return conn
@@ -145,6 +103,8 @@ mainFrame.Active = true
 mainFrame.Draggable = true
 mainFrame.Visible = true
 mainFrame.Parent = screenGui
+
+_G.mainFrame = mainFrame
 
 local mainCorner = Instance.new("UICorner")
 mainCorner.CornerRadius = UDim.new(0, 14)
@@ -277,6 +237,49 @@ for name, btn in pairs(tabButtons) do
     btn.MouseButton1Click:Connect(function() switchTab(name) end)
 end
 
+local function updateBindLabel(id, state)
+    local lbl = bindLabels[id]
+    if not lbl then return end
+    local status = state and " [ON]" or " [OFF]"
+    lbl.Text = id .. ": " .. getKeyName(BINDS[id]) .. status
+end
+
+local bindActions = {
+    toggleMenu = function()
+        if _G.mainFrame then
+            _G.mainFrame.Visible = not _G.mainFrame.Visible
+        end
+    end,
+    espKiller = function()
+        ESP_KILLER = not ESP_KILLER
+        updateBindLabel("espKiller", ESP_KILLER)
+    end,
+    espPallet = function()
+        ESP_PALLET = not ESP_PALLET
+        updateBindLabel("espPallet", ESP_PALLET)
+    end,
+    espGenerator = function()
+        ESP_GENERATOR = not ESP_GENERATOR
+        updateBindLabel("espGenerator", ESP_GENERATOR)
+    end,
+    autoParry = function()
+        AUTO_PARRY = not AUTO_PARRY
+        updateBindLabel("autoParry", AUTO_PARRY)
+    end,
+    fly = function()
+        FLY_ENABLED = not FLY_ENABLED
+        updateBindLabel("fly", FLY_ENABLED)
+    end,
+    noclip = function()
+        NOCLIP_ENABLED = not NOCLIP_ENABLED
+        updateBindLabel("noclip", NOCLIP_ENABLED)
+    end,
+    speed = function()
+        SPEED_ENABLED = not SPEED_ENABLED
+        updateBindLabel("speed", SPEED_ENABLED)
+    end,
+}
+
 local function createToggle(parent, text, callback)
     local btn = Instance.new("TextButton")
     btn.Size = UDim2.new(1, 0, 0, 36)
@@ -310,6 +313,7 @@ local function createToggle(parent, text, callback)
         end
         callback(state)
     end)
+    return btn
 end
 
 local function createColorButton(parent, text, callback)
@@ -350,10 +354,10 @@ local function createColorButton(parent, text, callback)
     end)
 end
 
-local function createExpandableESP(parent, titleText, toggleText, onToggle, colorText, onColor)
+local function createSlider(parent, text, minVal, maxVal, defaultVal, callback)
     local container = Instance.new("Frame")
-    container.Size = UDim2.new(0.95, 0, 0, 40)
-    container.Position = UDim2.new(0.025, 0, 0, 0)
+    container.Size = UDim2.new(1, 0, 0, 50)
+    container.Position = UDim2.new(0, 0, 0, 0)
     container.BackgroundColor3 = Color3.fromRGB(30, 30, 30)
     container.BorderSizePixel = 0
     container.Parent = parent
@@ -364,103 +368,6 @@ local function createExpandableESP(parent, titleText, toggleText, onToggle, colo
     cs.Color = Color3.fromRGB(80, 80, 80)
     cs.Thickness = 1
     cs.Parent = container
-
-    local btn = Instance.new("TextButton")
-    btn.Size = UDim2.new(1, 0, 1, 0)
-    btn.BackgroundTransparency = 1
-    btn.Text = titleText .. "  ▼"
-    btn.TextColor3 = Color3.fromRGB(255, 255, 255)
-    btn.Font = Enum.Font.GothamBold
-    btn.TextSize = 14
-    btn.TextXAlignment = Enum.TextXAlignment.Left
-    btn.Parent = container
-    local btnPadding = Instance.new("UIPadding")
-    btnPadding.PaddingLeft = UDim.new(0, 12)
-    btnPadding.Parent = btn
-
-    local expanded = false
-    local content = Instance.new("Frame")
-    content.Size = UDim2.new(0.95, 0, 0, 80)
-    content.Position = UDim2.new(0.025, 0, 0, 0)
-    content.BackgroundColor3 = Color3.fromRGB(30, 30, 30)
-    content.BorderSizePixel = 0
-    content.Visible = false
-    content.Parent = parent
-    local conCorner = Instance.new("UICorner")
-    conCorner.CornerRadius = UDim.new(0, 10)
-    conCorner.Parent = content
-    local conStroke = Instance.new("UIStroke")
-    conStroke.Color = Color3.fromRGB(80, 80, 80)
-    conStroke.Thickness = 1
-    conStroke.Parent = content
-
-    local conLayout = Instance.new("UIListLayout")
-    conLayout.Padding = UDim.new(0, 6)
-    conLayout.SortOrder = Enum.SortOrder.LayoutOrder
-    conLayout.HorizontalAlignment = Enum.HorizontalAlignment.Center
-    conLayout.Parent = content
-    local conPadding = Instance.new("UIPadding")
-    conPadding.PaddingTop = UDim.new(0, 6)
-    conPadding.PaddingBottom = UDim.new(0, 6)
-    conPadding.Parent = content
-
-    createToggle(content, toggleText, onToggle)
-    createColorButton(content, colorText, onColor)
-
-    btn.MouseButton1Click:Connect(function()
-        expanded = not expanded
-        content.Visible = expanded
-        if expanded then
-            btn.Text = titleText .. "  ▲"
-        else
-            btn.Text = titleText .. "  ▼"
-        end
-    end)
-end
-
-local function createDropdownSlider(parent, text, minVal, maxVal, defaultVal, callback)
-    local container = Instance.new("Frame")
-    container.Size = UDim2.new(0.95, 0, 0, 40)
-    container.Position = UDim2.new(0.025, 0, 0, 0)
-    container.BackgroundColor3 = Color3.fromRGB(30, 30, 30)
-    container.BorderSizePixel = 0
-    container.Parent = parent
-    local cc = Instance.new("UICorner")
-    cc.CornerRadius = UDim.new(0, 10)
-    cc.Parent = container
-    local cs = Instance.new("UIStroke")
-    cs.Color = Color3.fromRGB(80, 80, 80)
-    cs.Thickness = 1
-    cs.Parent = container
-
-    local btn = Instance.new("TextButton")
-    btn.Size = UDim2.new(1, 0, 1, 0)
-    btn.BackgroundTransparency = 1
-    btn.Text = text .. "  ▼"
-    btn.TextColor3 = Color3.fromRGB(255, 255, 255)
-    btn.Font = Enum.Font.GothamBold
-    btn.TextSize = 14
-    btn.TextXAlignment = Enum.TextXAlignment.Left
-    btn.Parent = container
-    local btnPadding = Instance.new("UIPadding")
-    btnPadding.PaddingLeft = UDim.new(0, 12)
-    btnPadding.Parent = btn
-
-    local expanded = false
-    local sliderContainer = Instance.new("Frame")
-    sliderContainer.Size = UDim2.new(0.95, 0, 0, 50)
-    sliderContainer.Position = UDim2.new(0.025, 0, 0, 0)
-    sliderContainer.BackgroundColor3 = Color3.fromRGB(30, 30, 30)
-    sliderContainer.BorderSizePixel = 0
-    sliderContainer.Visible = false
-    sliderContainer.Parent = parent
-    local scCorner = Instance.new("UICorner")
-    scCorner.CornerRadius = UDim.new(0, 10)
-    scCorner.Parent = sliderContainer
-    local scStroke = Instance.new("UIStroke")
-    scStroke.Color = Color3.fromRGB(80, 80, 80)
-    scStroke.Thickness = 1
-    scStroke.Parent = sliderContainer
 
     local label = Instance.new("TextLabel")
     label.Size = UDim2.new(1, -10, 0, 20)
@@ -471,14 +378,14 @@ local function createDropdownSlider(parent, text, minVal, maxVal, defaultVal, ca
     label.Font = Enum.Font.Gotham
     label.TextSize = 12
     label.TextXAlignment = Enum.TextXAlignment.Left
-    label.Parent = sliderContainer
+    label.Parent = container
 
     local sliderBg = Instance.new("Frame")
     sliderBg.Size = UDim2.new(0.9, 0, 0, 8)
     sliderBg.Position = UDim2.new(0.05, 0, 0, 30)
     sliderBg.BackgroundColor3 = Color3.fromRGB(60, 60, 60)
     sliderBg.BorderSizePixel = 0
-    sliderBg.Parent = sliderContainer
+    sliderBg.Parent = container
     local sbCorner = Instance.new("UICorner")
     sbCorner.CornerRadius = UDim.new(1, 0)
     sbCorner.Parent = sliderBg
@@ -532,15 +439,7 @@ local function createDropdownSlider(parent, text, minVal, maxVal, defaultVal, ca
         end
     end))
 
-    btn.MouseButton1Click:Connect(function()
-        expanded = not expanded
-        sliderContainer.Visible = expanded
-        if expanded then
-            btn.Text = text .. "  ▲"
-        else
-            btn.Text = text .. "  ▼"
-        end
-    end)
+    return container, label, sliderBg, fill, knob
 end
 
 local function createSectionLabel(parent, text)
@@ -831,68 +730,73 @@ table.insert(loops, task.spawn(function()
     end
 end))
 
+local flyVelocity = nil
+
 track(RunService.Stepped:Connect(function(_, dt)
-    if SPEED_ENABLED then
-        local hum = LocalPlayer.Character and LocalPlayer.Character:FindFirstChildOfClass("Humanoid")
-        if hum then
+    local char = LocalPlayer.Character
+    local hum = char and char:FindFirstChildOfClass("Humanoid")
+    local root = char and char:FindFirstChild("HumanoidRootPart")
+
+    if hum then
+        if SPEED_ENABLED then
             hum.WalkSpeed = SPEED_VALUE
-        end
-    else
-        local hum = LocalPlayer.Character and LocalPlayer.Character:FindFirstChildOfClass("Humanoid")
-        if hum then
+        else
             hum.WalkSpeed = 16
         end
-    end
 
-    if JUMP_ENABLED then
-        local hum = LocalPlayer.Character and LocalPlayer.Character:FindFirstChildOfClass("Humanoid")
-        if hum then
+        if JUMP_ENABLED then
             hum.JumpPower = JUMP_VALUE
-        end
-    else
-        local hum = LocalPlayer.Character and LocalPlayer.Character:FindFirstChildOfClass("Humanoid")
-        if hum then
+        else
             hum.JumpPower = 50
         end
     end
 
-    if NOCLIP_ENABLED then
-        local char = LocalPlayer.Character
-        if char then
-            for _, part in ipairs(char:GetDescendants()) do
-                if part:IsA("BasePart") and part.CanCollide then
-                    part.CanCollide = false
-                end
+    if NOCLIP_ENABLED and char then
+        for _, part in ipairs(char:GetDescendants()) do
+            if part:IsA("BasePart") and part.CanCollide then
+                part.CanCollide = false
             end
         end
     end
 
-    if FLY_ENABLED then
-        local char = LocalPlayer.Character
-        local root = char and char:FindFirstChild("HumanoidRootPart")
-        if root then
-            local moveDir = Vector3.new(0, 0, 0)
-            if UserInputService:IsKeyDown(Enum.KeyCode.W) then
-                moveDir = moveDir + Workspace.CurrentCamera.CFrame.LookVector
-            end
-            if UserInputService:IsKeyDown(Enum.KeyCode.S) then
-                moveDir = moveDir - Workspace.CurrentCamera.CFrame.LookVector
-            end
-            if UserInputService:IsKeyDown(Enum.KeyCode.A) then
-                moveDir = moveDir - Workspace.CurrentCamera.CFrame.RightVector
-            end
-            if UserInputService:IsKeyDown(Enum.KeyCode.D) then
-                moveDir = moveDir + Workspace.CurrentCamera.CFrame.RightVector
-            end
-            if UserInputService:IsKeyDown(Enum.KeyCode.Space) then
-                moveDir = moveDir + Vector3.new(0, 1, 0)
-            end
-            if UserInputService:IsKeyDown(Enum.KeyCode.LeftControl) then
-                moveDir = moveDir - Vector3.new(0, 1, 0)
-            end
-            if moveDir.Magnitude > 0 then
-                root.CFrame = root.CFrame + moveDir.Unit * FLY_SPEED * dt
-            end
+    if FLY_ENABLED and root then
+        if not flyVelocity or not flyVelocity.Parent then
+            flyVelocity = Instance.new("BodyVelocity")
+            flyVelocity.MaxForce = Vector3.new(1e5, 1e5, 1e5)
+            flyVelocity.P = 1e4
+            flyVelocity.Parent = root
+        end
+
+        local moveDir = Vector3.new(0, 0, 0)
+        local cam = Workspace.CurrentCamera
+        if UserInputService:IsKeyDown(Enum.KeyCode.W) then
+            moveDir = moveDir + cam.CFrame.LookVector
+        end
+        if UserInputService:IsKeyDown(Enum.KeyCode.S) then
+            moveDir = moveDir - cam.CFrame.LookVector
+        end
+        if UserInputService:IsKeyDown(Enum.KeyCode.A) then
+            moveDir = moveDir - cam.CFrame.RightVector
+        end
+        if UserInputService:IsKeyDown(Enum.KeyCode.D) then
+            moveDir = moveDir + cam.CFrame.RightVector
+        end
+        if UserInputService:IsKeyDown(Enum.KeyCode.Space) then
+            moveDir = moveDir + Vector3.new(0, 1, 0)
+        end
+        if UserInputService:IsKeyDown(Enum.KeyCode.LeftControl) then
+            moveDir = moveDir - Vector3.new(0, 1, 0)
+        end
+
+        if moveDir.Magnitude > 0 then
+            flyVelocity.Velocity = moveDir.Unit * FLY_SPEED
+        else
+            flyVelocity.Velocity = Vector3.new(0, 0, 0)
+        end
+    else
+        if flyVelocity then
+            flyVelocity:Destroy()
+            flyVelocity = nil
         end
     end
 end))
@@ -920,6 +824,29 @@ track(UserInputService.InputBegan:Connect(function(input, gpe)
     end
 end))
 
+minimizeBtn.MouseButton1Click:Connect(function()
+    menuMinimized = not menuMinimized
+    tabBar.Visible = not menuMinimized
+    for _, page in ipairs({espPage, visualPage, survivorPage, movementPage, bindsPage}) do
+        page.Visible = not menuMinimized and page.Visible
+    end
+    if menuMinimized then
+        mainFrame.Size = UDim2.new(0, 380, 0, 50)
+        minimizeBtn.Text = "+"
+    else
+        mainFrame.Size = UDim2.new(0, 380, 0, 560)
+        minimizeBtn.Text = "—"
+        switchTab("ESP")
+    end
+end)
+
+closeBtn.MouseButton1Click:Connect(function()
+    screenGui:Destroy()
+    for _, c in ipairs(connections) do
+        pcall(function() c:Disconnect() end)
+    end
+end)
+
 createToggle(espPage, "ESP Killers", function(state)
     ESP_KILLER = state
     updateBindLabel("espKiller", state)
@@ -940,7 +867,7 @@ createToggle(survivorPage, "Auto Parry", function(state)
     AUTO_PARRY = state
     updateBindLabel("autoParry", state)
 end)
-createDropdownSlider(survivorPage, "Parry Radius", 5, 30, PARRY_RADIUS, function(val)
+createSlider(survivorPage, "Parry Radius", 5, 30, PARRY_RADIUS, function(val)
     PARRY_RADIUS = val
 end)
 
@@ -948,15 +875,24 @@ createToggle(movementPage, "Speed", function(state)
     SPEED_ENABLED = state
     updateBindLabel("speed", state)
 end)
-createDropdownSlider(movementPage, "Speed Value", 16, 200, SPEED_VALUE, function(val)
+createToggle(movementPage, "Speed Off/On", function(state)
+    SPEED_ENABLED = state
+    updateBindLabel("speed", state)
+end)
+createSlider(movementPage, "Speed Value", 16, 200, SPEED_VALUE, function(val)
     SPEED_VALUE = val
 end)
+
 createToggle(movementPage, "Jump", function(state)
     JUMP_ENABLED = state
 end)
-createDropdownSlider(movementPage, "Jump Value", 50, 300, JUMP_VALUE, function(val)
+createToggle(movementPage, "Jump Off/On", function(state)
+    JUMP_ENABLED = state
+end)
+createSlider(movementPage, "Jump Value", 50, 300, JUMP_VALUE, function(val)
     JUMP_VALUE = val
 end)
+
 createToggle(movementPage, "Noclip", function(state)
     NOCLIP_ENABLED = state
     updateBindLabel("noclip", state)
@@ -965,7 +901,7 @@ createToggle(movementPage, "Fly", function(state)
     FLY_ENABLED = state
     updateBindLabel("fly", state)
 end)
-createDropdownSlider(movementPage, "Fly Speed", 10, 200, FLY_SPEED, function(val)
+createSlider(movementPage, "Fly Speed", 10, 200, FLY_SPEED, function(val)
     FLY_SPEED = val
 end)
 
