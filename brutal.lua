@@ -190,13 +190,14 @@ screenGui.Parent = game.CoreGui
 screenGui.Enabled = false
 
 local mainFrame = Instance.new("Frame")
-mainFrame.Size = UDim2.new(0, 380, 0, 560)
+mainFrame.Size = UDim2.new(0, 0, 0, 0)
 mainFrame.Position = UDim2.new(0, 30, 0.5, -280)
 mainFrame.BackgroundColor3 = Color3.fromRGB(15, 15, 15)
 mainFrame.BorderSizePixel = 0
 mainFrame.Active = true
 mainFrame.Draggable = true
 mainFrame.Visible = true
+mainFrame.ClipsDescendants = true
 mainFrame.Parent = screenGui
 
 _G.mainFrame = mainFrame
@@ -864,21 +865,29 @@ table.insert(loops, task.spawn(function()
 end))
 
 table.insert(loops, task.spawn(function()
-    while task.wait(0.2) do
-        if NO_FALL_ENABLED then
-            local char = LocalPlayer.Character
-            local hum = char and char:FindFirstChildOfClass("Humanoid")
-            if hum then
-                hum:SetStateEnabled(Enum.HumanoidStateType.FallingDown, false)
-                hum:SetStateEnabled(Enum.HumanoidStateType.Landed, false)
+    while task.wait(0.05) do
+        local char = LocalPlayer.Character
+        local hum = char and char:FindFirstChildOfClass("Humanoid")
+        local root = char and char:FindFirstChild("HumanoidRootPart")
+        if hum and root then
+            if NO_FALL_ENABLED then
+                if root.Velocity.Y < -20 then
+                    root.Velocity = Vector3.new(root.Velocity.X, 0, root.Velocity.Z)
+                    root.CFrame = root.CFrame + Vector3.new(0, 1, 0)
+                end
+                if hum:GetState() == Enum.HumanoidStateType.Freefall then
+                    local ray = Ray.new(root.Position, Vector3.new(0, -10, 0))
+                    local hit, pos = Workspace:FindPartOnRay(ray, char)
+                    if hit then
+                        root.CFrame = CFrame.new(pos + Vector3.new(0, 3, 0))
+                    end
+                end
             end
-        end
-        if NO_SLOWED_ENABLED then
-            local char = LocalPlayer.Character
-            local hum = char and char:FindFirstChildOfClass("Humanoid")
-            if hum and not SPEED_ENABLED then
-                if hum.WalkSpeed < 16 then
-                    hum.WalkSpeed = 16
+            if NO_SLOWED_ENABLED then
+                if not SPEED_ENABLED then
+                    if hum.WalkSpeed < 16 then
+                        hum.WalkSpeed = 16
+                    end
                 end
             end
         end
@@ -901,17 +910,6 @@ track(RunService.Stepped:Connect(function(_, dt)
             hum.JumpPower = JUMP_VALUE
         else
             hum.JumpPower = 50
-        end
-    end
-
-    if NO_FALL_ENABLED and hum then
-        hum:SetStateEnabled(Enum.HumanoidStateType.FallingDown, false)
-        hum:SetStateEnabled(Enum.HumanoidStateType.Landed, false)
-    end
-
-    if NO_SLOWED_ENABLED and hum and not SPEED_ENABLED then
-        if hum.WalkSpeed < 16 then
-            hum.WalkSpeed = 16
         end
     end
 
@@ -1041,15 +1039,16 @@ end))
 
 minimizeBtn.MouseButton1Click:Connect(function()
     menuMinimized = not menuMinimized
-    tabBar.Visible = not menuMinimized
-    for _, page in ipairs({espPage, visualPage, survivorPage, movementPage, bindsPage}) do
-        page.Visible = not menuMinimized and page.Visible
-    end
     if menuMinimized then
+        for _, page in ipairs({espPage, visualPage, survivorPage, movementPage, bindsPage}) do
+            page.Visible = false
+        end
+        tabBar.Visible = false
         mainFrame.Size = UDim2.new(0, 380, 0, 50)
         minimizeBtn.Text = "+"
     else
         mainFrame.Size = UDim2.new(0, 380, 0, 560)
+        tabBar.Visible = true
         minimizeBtn.Text = "—"
         switchTab("ESP")
     end
@@ -1200,6 +1199,11 @@ task.spawn(function()
     task.wait(0.3)
     loadingGui:Destroy()
     screenGui.Enabled = true
+    mainFrame.Size = UDim2.new(0, 0, 0, 0)
+    mainFrame.Position = UDim2.new(0, 30, 0.5, -30)
+    task.wait(0.05)
+    mainFrame:TweenSize(UDim2.new(0, 380, 0, 560), Enum.EasingDirection.Out, Enum.EasingStyle.Back, 0.4, true)
+    mainFrame:TweenPosition(UDim2.new(0, 30, 0.5, -280), Enum.EasingDirection.Out, Enum.EasingStyle.Back, 0.4, true)
 end)
 
 print("[BRUTAL SCRIPT] Loaded successfully.")
