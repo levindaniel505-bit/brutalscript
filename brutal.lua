@@ -2608,7 +2608,7 @@ RunService.RenderStepped:Connect(function()
                 local flatLook = Vector3.new(look.X, 0, look.Z)
                 if flatLook.Magnitude > 0 then
                     flatLook = flatLook.Unit
-                    local baseCF = CFrame.new(hrp.Position, hrp.Position + flatLook)
+                    local baseCF = CFrame.new(hrp.Position, hrp.Position - flatLook)
                     local angle = math.sin(tick() * Moonwalk.SpamSpeed) * Moonwalk.Intensity
                     hrp.CFrame = baseCF * CFrame.Angles(0, math.rad(angle), 0)
                     humanoid:Move(Vector3.new(0, 0, 1), true)
