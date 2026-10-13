@@ -165,6 +165,7 @@ local EmoteBox =
     Tabs.Misc:AddRightGroupbox("Emote", "music")
 local FunBox = Tabs.Misc:AddRightGroupbox("fun", "smile")
 local VisualBox = Tabs.Visual:AddLeftGroupbox("Graphics", "sun")
+local MorphAvaBox = Tabs.Visual:AddLeftGroupbox("Morph Avatar", "user")
 local TimeBox = Tabs.Visual:AddRightGroupbox("Clock & Ambient", "alarm-clock-check")
 local ZoomBox = Tabs.Visual:AddRightGroupbox("Zoom Out", "fullscreen")
 local SettingBox = Tabs.UISettings:AddLeftGroupbox("Menu", "wrench")
@@ -349,6 +350,14 @@ local Movement = {
     WalkSpeedValue = 17.6,
     OriginalWalkSpeed = 16,
     NoClip = false
+}
+
+local AvatarStealer = {
+    Enabled = true,
+    TargetUsername = "",
+    OriginalDescription = nil,
+    CurrentStealedUserId = nil,
+    BlockyBody = true
 }
 
 local function GetNil(Name, DebugId)
@@ -2045,6 +2054,107 @@ LocalPlayer.CharacterAdded:Connect(function()
     end
 end)
 
+local function saveOriginalAppearance()
+    local char = LocalPlayer.Character
+    if not char then return end
+    local hum = char:FindFirstChildOfClass("Humanoid")
+    if hum then
+        AvatarStealer.OriginalDescription = hum:GetAppliedDescription()
+    end
+end
+
+local function applyBlockyBody(character)
+    local hum = character:FindFirstChildOfClass("Humanoid")
+    if not hum then return end
+
+    local desc = Instance.new("HumanoidDescription")
+    desc.BodyTypeScale = 1
+    desc.DepthScale = 1
+    desc.HeadScale = 1
+    desc.HeightScale = 1
+    desc.ProportionScale = 0
+    desc.WidthScale = 1
+
+    hum:ApplyDescriptionClientServer(desc)
+end
+
+local function removeAllClothingAndAccessories(character)
+    for _, v in pairs(character:GetDescendants()) do
+        if v:IsA("Accessory") or v:IsA("Clothing") or v:IsA("Shirt") or v:IsA("Pants") or v:IsA("ShirtGraphic") then
+            v:Destroy()
+        end
+    end
+end
+
+local function copyAvatar(username)
+    if not username or username == "" then
+        return
+    end
+
+    saveOriginalAppearance()
+
+    local success, userId = pcall(function()
+        return Players:GetUserIdFromNameAsync(username)
+    end)
+
+    if not success then
+        return
+    end
+
+    AvatarStealer.CurrentStealedUserId = userId
+
+    local char = LocalPlayer.Character
+    if not char then return end
+
+    local hum = char:FindFirstChildOfClass("Humanoid")
+    if not hum then return end
+
+    task.spawn(function()
+        local desc = Players:GetHumanoidDescriptionFromUserId(userId)
+
+        if AvatarStealer.BlockyBody then
+            applyBlockyBody(char)
+            task.wait(0.3)
+        end
+
+        removeAllClothingAndAccessories(char)
+        task.wait(0.2)
+
+        hum:ApplyDescriptionClientServer(desc)
+    end)
+end
+
+local function resetAvatar()
+    if not AvatarStealer.OriginalDescription then
+        return
+    end
+
+    local char = LocalPlayer.Character
+    if not char then return end
+
+    local hum = char:FindFirstChildOfClass("Humanoid")
+    if hum then
+        removeAllClothingAndAccessories(char)
+        hum:ApplyDescriptionClientServer(AvatarStealer.OriginalDescription)
+        AvatarStealer.CurrentStealedUserId = nil
+    end
+end
+
+LocalPlayer.CharacterAdded:Connect(function(char)
+    task.wait(1.5)
+    if AvatarStealer.CurrentStealedUserId then
+        local hum = char:FindFirstChildOfClass("Humanoid")
+        if hum then
+            local desc = Players:GetHumanoidDescriptionFromUserId(AvatarStealer.CurrentStealedUserId)
+            if AvatarStealer.BlockyBody then
+                applyBlockyBody(char)
+            end
+            removeAllClothingAndAccessories(char)
+            hum:ApplyDescriptionClientServer(desc)
+        end
+    end
+end)
+
 local function teleportToFinishLine()
 
     local root = getRoot()
@@ -3489,6 +3599,26 @@ FunBox:AddToggle("JerkTool", {
         end
     end
 })
+
+MorphAvaBox:AddInput("StealUsername", {
+    Text = "Target Username",
+    Default = "",
+    Placeholder = "Ketik username target...",
+    Callback = function(val)
+        AvatarStealer.TargetUsername = val
+    end
+})
+MorphAvaBox:AddButton("Copy Avatar", function()
+    copyAvatar(AvatarStealer.TargetUsername)
+end)
+
+MorphAvaBox:AddButton("Reset to Original Skin", function()
+    resetAvatar()
+end)
+
+MorphAvaBox:AddButton("Save Current as Original", function()
+    saveOriginalAppearance()
+end)
 
 VisualBox:AddCheckbox("Fullbright", {
 Text = "Fullbright",
