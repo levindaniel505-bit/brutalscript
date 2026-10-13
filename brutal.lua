@@ -815,4 +815,173 @@ table.insert(loops, task.spawn(function()
     end
 end))
 
-table.insert(
+table.insert(loops, task.spawn(function()
+    while task.wait(0.1) do
+        if AUTO_PARRY then
+            if getKillerAttacking() then
+                local now = tick()
+                if now - lastParry >= PARRY_COOLDOWN then
+                    lastParry = now
+                    VirtualInputManager:SendKeyEvent(true, PARRY_KEY, false, game)
+                    task.wait(0.05)
+                    VirtualInputManager:SendKeyEvent(false, PARRY_KEY, false, game)
+                end
+            end
+        end
+    end
+end))
+
+track(RunService.Stepped:Connect(function(_, dt)
+    if SPEED_ENABLED then
+        local hum = LocalPlayer.Character and LocalPlayer.Character:FindFirstChildOfClass("Humanoid")
+        if hum then
+            hum.WalkSpeed = SPEED_VALUE
+        end
+    else
+        local hum = LocalPlayer.Character and LocalPlayer.Character:FindFirstChildOfClass("Humanoid")
+        if hum then
+            hum.WalkSpeed = 16
+        end
+    end
+
+    if JUMP_ENABLED then
+        local hum = LocalPlayer.Character and LocalPlayer.Character:FindFirstChildOfClass("Humanoid")
+        if hum then
+            hum.JumpPower = JUMP_VALUE
+        end
+    else
+        local hum = LocalPlayer.Character and LocalPlayer.Character:FindFirstChildOfClass("Humanoid")
+        if hum then
+            hum.JumpPower = 50
+        end
+    end
+
+    if NOCLIP_ENABLED then
+        local char = LocalPlayer.Character
+        if char then
+            for _, part in ipairs(char:GetDescendants()) do
+                if part:IsA("BasePart") and part.CanCollide then
+                    part.CanCollide = false
+                end
+            end
+        end
+    end
+
+    if FLY_ENABLED then
+        local char = LocalPlayer.Character
+        local root = char and char:FindFirstChild("HumanoidRootPart")
+        if root then
+            local moveDir = Vector3.new(0, 0, 0)
+            if UserInputService:IsKeyDown(Enum.KeyCode.W) then
+                moveDir = moveDir + Workspace.CurrentCamera.CFrame.LookVector
+            end
+            if UserInputService:IsKeyDown(Enum.KeyCode.S) then
+                moveDir = moveDir - Workspace.CurrentCamera.CFrame.LookVector
+            end
+            if UserInputService:IsKeyDown(Enum.KeyCode.A) then
+                moveDir = moveDir - Workspace.CurrentCamera.CFrame.RightVector
+            end
+            if UserInputService:IsKeyDown(Enum.KeyCode.D) then
+                moveDir = moveDir + Workspace.CurrentCamera.CFrame.RightVector
+            end
+            if UserInputService:IsKeyDown(Enum.KeyCode.Space) then
+                moveDir = moveDir + Vector3.new(0, 1, 0)
+            end
+            if UserInputService:IsKeyDown(Enum.KeyCode.LeftControl) then
+                moveDir = moveDir - Vector3.new(0, 1, 0)
+            end
+            if moveDir.Magnitude > 0 then
+                root.CFrame = root.CFrame + moveDir.Unit * FLY_SPEED * dt
+            end
+        end
+    end
+end))
+
+track(UserInputService.InputBegan:Connect(function(input, gpe)
+    if gpe then return end
+    if bindingMode then
+        if input.UserInputType == Enum.UserInputType.Keyboard then
+            BINDS[bindingMode] = input.KeyCode
+            local btn = bindLabels[bindingMode]
+            if btn then
+                btn.Text = bindingMode .. ": " .. getKeyName(input.KeyCode)
+                btn.BackgroundColor3 = Color3.fromRGB(40, 40, 40)
+            end
+            bindingMode = nil
+            saveBinds()
+        end
+        return
+    end
+    for id, key in pairs(BINDS) do
+        if input.KeyCode == key then
+            local action = bindActions[id]
+            if action then action() end
+        end
+    end
+end))
+
+createToggle(espPage, "ESP Killers", function(state)
+    ESP_KILLER = state
+    updateBindLabel("espKiller", state)
+end)
+createToggle(espPage, "ESP Pallets", function(state)
+    ESP_PALLET = state
+    updateBindLabel("espPallet", state)
+end)
+createToggle(espPage, "ESP Generators", function(state)
+    ESP_GENERATOR = state
+    updateBindLabel("espGenerator", state)
+end)
+createToggle(espPage, "Show Distance", function(state)
+    ESP_DISTANCE = state
+end)
+
+createToggle(survivorPage, "Auto Parry", function(state)
+    AUTO_PARRY = state
+    updateBindLabel("autoParry", state)
+end)
+createDropdownSlider(survivorPage, "Parry Radius", 5, 30, PARRY_RADIUS, function(val)
+    PARRY_RADIUS = val
+end)
+
+createToggle(movementPage, "Speed", function(state)
+    SPEED_ENABLED = state
+    updateBindLabel("speed", state)
+end)
+createDropdownSlider(movementPage, "Speed Value", 16, 200, SPEED_VALUE, function(val)
+    SPEED_VALUE = val
+end)
+createToggle(movementPage, "Jump", function(state)
+    JUMP_ENABLED = state
+end)
+createDropdownSlider(movementPage, "Jump Value", 50, 300, JUMP_VALUE, function(val)
+    JUMP_VALUE = val
+end)
+createToggle(movementPage, "Noclip", function(state)
+    NOCLIP_ENABLED = state
+    updateBindLabel("noclip", state)
+end)
+createToggle(movementPage, "Fly", function(state)
+    FLY_ENABLED = state
+    updateBindLabel("fly", state)
+end)
+createDropdownSlider(movementPage, "Fly Speed", 10, 200, FLY_SPEED, function(val)
+    FLY_SPEED = val
+end)
+
+createSectionLabel(bindsPage, "Keybinds (click to rebind)")
+createBindButton(bindsPage, "toggleMenu", "Toggle Menu")
+createBindButton(bindsPage, "espKiller", "ESP Killers")
+createBindButton(bindsPage, "espPallet", "ESP Pallets")
+createBindButton(bindsPage, "espGenerator", "ESP Generators")
+createBindButton(bindsPage, "autoParry", "Auto Parry")
+createBindButton(bindsPage, "fly", "Fly")
+createBindButton(bindsPage, "noclip", "Noclip")
+createBindButton(bindsPage, "speed", "Speed")
+
+loadBinds()
+for id, _ in pairs(BINDS) do
+    updateBindLabel(id, false)
+end
+
+print("[BRUTAL SCRIPT] Loaded successfully.")
