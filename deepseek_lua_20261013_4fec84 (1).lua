@@ -284,9 +284,9 @@ local function createColorButton(parent, text, callback)
     end)
 end
 
-local function createSlider(parent, text, minVal, maxVal, defaultVal, callback)
+local function createDropdownSlider(parent, text, minVal, maxVal, defaultVal, callback)
     local container = Instance.new("Frame")
-    container.Size = UDim2.new(0.95, 0, 0, 50)
+    container.Size = UDim2.new(0.95, 0, 0, 40)
     container.Position = UDim2.new(0.025, 0, 0, 0)
     container.BackgroundColor3 = Color3.fromRGB(30, 30, 30)
     container.BorderSizePixel = 0
@@ -299,6 +299,35 @@ local function createSlider(parent, text, minVal, maxVal, defaultVal, callback)
     cs.Thickness = 1
     cs.Parent = container
 
+    local btn = Instance.new("TextButton")
+    btn.Size = UDim2.new(1, 0, 1, 0)
+    btn.BackgroundTransparency = 1
+    btn.Text = text .. "  ▼"
+    btn.TextColor3 = Color3.fromRGB(255, 255, 255)
+    btn.Font = Enum.Font.GothamBold
+    btn.TextSize = 14
+    btn.TextXAlignment = Enum.TextXAlignment.Left
+    btn.Parent = container
+    local btnPadding = Instance.new("UIPadding")
+    btnPadding.PaddingLeft = UDim.new(0, 12)
+    btnPadding.Parent = btn
+
+    local expanded = false
+    local sliderContainer = Instance.new("Frame")
+    sliderContainer.Size = UDim2.new(0.95, 0, 0, 50)
+    sliderContainer.Position = UDim2.new(0.025, 0, 0, 0)
+    sliderContainer.BackgroundColor3 = Color3.fromRGB(30, 30, 30)
+    sliderContainer.BorderSizePixel = 0
+    sliderContainer.Visible = false
+    sliderContainer.Parent = parent
+    local scCorner = Instance.new("UICorner")
+    scCorner.CornerRadius = UDim.new(0, 10)
+    scCorner.Parent = sliderContainer
+    local scStroke = Instance.new("UIStroke")
+    scStroke.Color = Color3.fromRGB(80, 80, 80)
+    scStroke.Thickness = 1
+    scStroke.Parent = sliderContainer
+
     local label = Instance.new("TextLabel")
     label.Size = UDim2.new(1, -10, 0, 20)
     label.Position = UDim2.new(0, 5, 0, 2)
@@ -308,14 +337,14 @@ local function createSlider(parent, text, minVal, maxVal, defaultVal, callback)
     label.Font = Enum.Font.Gotham
     label.TextSize = 12
     label.TextXAlignment = Enum.TextXAlignment.Left
-    label.Parent = container
+    label.Parent = sliderContainer
 
     local sliderBg = Instance.new("Frame")
     sliderBg.Size = UDim2.new(0.9, 0, 0, 8)
     sliderBg.Position = UDim2.new(0.05, 0, 0, 30)
     sliderBg.BackgroundColor3 = Color3.fromRGB(60, 60, 60)
     sliderBg.BorderSizePixel = 0
-    sliderBg.Parent = container
+    sliderBg.Parent = sliderContainer
     local sbCorner = Instance.new("UICorner")
     sbCorner.CornerRadius = UDim.new(1, 0)
     sbCorner.Parent = sliderBg
@@ -366,6 +395,16 @@ local function createSlider(parent, text, minVal, maxVal, defaultVal, callback)
     UserInputService.InputChanged:Connect(function(input)
         if dragging and (input.UserInputType == Enum.UserInputType.MouseMovement or input.UserInputType == Enum.UserInputType.Touch) then
             updateFromInput(input)
+        end
+    end)
+
+    btn.MouseButton1Click:Connect(function()
+        expanded = not expanded
+        sliderContainer.Visible = expanded
+        if expanded then
+            btn.Text = text .. "  ▲"
+        else
+            btn.Text = text .. "  ▼"
         end
     end)
 end
@@ -562,17 +601,8 @@ createColorButton(espPage, "Цвет Генераторов", function(c) GENERA
 local defaultFOV = 70
 Workspace.CurrentCamera.FieldOfView = defaultFOV
 
-createSlider(visualPage, "FOV", 30, 120, defaultFOV, function(v)
+createDropdownSlider(visualPage, "FOV", 30, 120, defaultFOV, function(v)
     Workspace.CurrentCamera.FieldOfView = v
-end)
-
-createToggle(visualPage, "4:3 (широкий экран)", function(v)
-    local cam = Workspace.CurrentCamera
-    if v then
-        cam.FieldOfView = 100
-    else
-        cam.FieldOfView = defaultFOV
-    end
 end)
 
 print("[Brutal Script] loaded")
