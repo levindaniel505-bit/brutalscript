@@ -1,6 +1,7 @@
 local Players = game:GetService("Players")
 local RunService = game:GetService("RunService")
 local Workspace = game:GetService("Workspace")
+local UserInputService = game:GetService("UserInputService")
 local LocalPlayer = Players.LocalPlayer
 
 local ESP_KILLER = false
@@ -283,6 +284,92 @@ local function createColorButton(parent, text, callback)
     end)
 end
 
+local function createSlider(parent, text, minVal, maxVal, defaultVal, callback)
+    local container = Instance.new("Frame")
+    container.Size = UDim2.new(0.95, 0, 0, 50)
+    container.Position = UDim2.new(0.025, 0, 0, 0)
+    container.BackgroundColor3 = Color3.fromRGB(30, 30, 30)
+    container.BorderSizePixel = 0
+    container.Parent = parent
+    local cc = Instance.new("UICorner")
+    cc.CornerRadius = UDim.new(0, 10)
+    cc.Parent = container
+    local cs = Instance.new("UIStroke")
+    cs.Color = Color3.fromRGB(80, 80, 80)
+    cs.Thickness = 1
+    cs.Parent = container
+
+    local label = Instance.new("TextLabel")
+    label.Size = UDim2.new(1, -10, 0, 20)
+    label.Position = UDim2.new(0, 5, 0, 2)
+    label.BackgroundTransparency = 1
+    label.Text = text .. ": " .. defaultVal
+    label.TextColor3 = Color3.fromRGB(255, 255, 255)
+    label.Font = Enum.Font.Gotham
+    label.TextSize = 12
+    label.TextXAlignment = Enum.TextXAlignment.Left
+    label.Parent = container
+
+    local sliderBg = Instance.new("Frame")
+    sliderBg.Size = UDim2.new(0.9, 0, 0, 8)
+    sliderBg.Position = UDim2.new(0.05, 0, 0, 30)
+    sliderBg.BackgroundColor3 = Color3.fromRGB(60, 60, 60)
+    sliderBg.BorderSizePixel = 0
+    sliderBg.Parent = container
+    local sbCorner = Instance.new("UICorner")
+    sbCorner.CornerRadius = UDim.new(1, 0)
+    sbCorner.Parent = sliderBg
+
+    local fill = Instance.new("Frame")
+    fill.Size = UDim2.new((defaultVal - minVal) / (maxVal - minVal), 0, 1, 0)
+    fill.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
+    fill.BorderSizePixel = 0
+    fill.Parent = sliderBg
+    local fillCorner = Instance.new("UICorner")
+    fillCorner.CornerRadius = UDim.new(1, 0)
+    fillCorner.Parent = fill
+
+    local knob = Instance.new("Frame")
+    knob.Size = UDim2.new(0, 16, 0, 16)
+    knob.Position = UDim2.new((defaultVal - minVal) / (maxVal - minVal), 0, 0.5, -8)
+    knob.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
+    knob.BorderSizePixel = 0
+    knob.Parent = sliderBg
+    local knobCorner = Instance.new("UICorner")
+    knobCorner.CornerRadius = UDim.new(1, 0)
+    knobCorner.Parent = knob
+
+    local dragging = false
+
+    local function updateFromInput(input)
+        local rel = (input.Position.X - sliderBg.AbsolutePosition.X) / sliderBg.AbsoluteSize.X
+        if rel < 0 then rel = 0 end
+        if rel > 1 then rel = 1 end
+        fill.Size = UDim2.new(rel, 0, 1, 0)
+        knob.Position = UDim2.new(rel, 0, 0.5, -8)
+        local value = math.floor(minVal + (maxVal - minVal) * rel)
+        label.Text = text .. ": " .. value
+        callback(value)
+    end
+
+    sliderBg.InputBegan:Connect(function(input)
+        if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
+            dragging = true
+            updateFromInput(input)
+        end
+    end)
+    sliderBg.InputEnded:Connect(function(input)
+        if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
+            dragging = false
+        end
+    end)
+    UserInputService.InputChanged:Connect(function(input)
+        if dragging and (input.UserInputType == Enum.UserInputType.MouseMovement or input.UserInputType == Enum.UserInputType.Touch) then
+            updateFromInput(input)
+        end
+    end)
+end
+
 local function createHighlight(adornee, color)
     local h = Instance.new("Highlight")
     h.Adornee = adornee
@@ -472,17 +559,19 @@ createColorButton(espPage, "Цвет Палеток", function(c) PALLET_COLOR =
 createToggle(espPage, "ESP Генераторов", function(v) ESP_GENERATOR = v end)
 createColorButton(espPage, "Цвет Генераторов", function(c) GENERATOR_COLOR = c end)
 
-local res43 = false
-local originalFOV = 70
+local defaultFOV = 70
+Workspace.CurrentCamera.FieldOfView = defaultFOV
 
-createToggle(visualPage, "Разрешение 4:3 (FOV)", function(v)
-    res43 = v
+createSlider(visualPage, "FOV", 30, 120, defaultFOV, function(v)
+    Workspace.CurrentCamera.FieldOfView = v
+end)
+
+createToggle(visualPage, "4:3 (широкий экран)", function(v)
     local cam = Workspace.CurrentCamera
     if v then
-        originalFOV = cam.FieldOfView
-        cam.FieldOfView = 90
+        cam.FieldOfView = 100
     else
-        cam.FieldOfView = originalFOV
+        cam.FieldOfView = defaultFOV
     end
 end)
 
