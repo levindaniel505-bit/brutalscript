@@ -3,9 +3,11 @@ local RunService = game:GetService("RunService")
 local Workspace = game:GetService("Workspace")
 local UserInputService = game:GetService("UserInputService")
 local VirtualInputManager = game:GetService("VirtualInputManager")
+local SoundService = game:GetService("SoundService")
 local LocalPlayer = Players.LocalPlayer
 
-local CONFIG_FILE = "brutal_config.json"
+local CONFIG_DIR = "brutal_configs"
+local CURRENT_CONFIG_NAME = "default"
 
 local CONFIG = {
     espKiller = false,
@@ -101,7 +103,46 @@ local BINDS = {
 
 local bindLabels = {}
 
+local BTN_NEUTRAL = Color3.fromRGB(35, 35, 35)
+local BTN_HOVER = Color3.fromRGB(55, 55, 55)
+local BTN_ACTIVE = Color3.fromRGB(70, 70, 70)
+local BTN_ACCENT = Color3.fromRGB(180, 180, 180)
+local BTN_DANGER = Color3.fromRGB(140, 40, 40)
+local BTN_SUCCESS = Color3.fromRGB(40, 130, 60)
+local BTN_INFO = Color3.fromRGB(40, 80, 140)
+
+local function ensureConfigDir()
+    if not (isfolder and makefolder) then return end
+    if not isfolder(CONFIG_DIR) then
+        pcall(function() makefolder(CONFIG_DIR) end)
+    end
+end
+
+local function getConfigPath(name)
+    return CONFIG_DIR .. "/" .. name .. ".json"
+end
+
+local function listConfigs()
+    local list = {}
+    if not (listfiles and isfolder) then
+        return {CURRENT_CONFIG_NAME}
+    end
+    ensureConfigDir()
+    if isfolder(CONFIG_DIR) then
+        local ok, files = pcall(function() return listfiles(CONFIG_DIR) end)
+        if ok and files then
+            for _, f in ipairs(files) do
+                local name = f:match("([^/\\]+)%.json$")
+                if name then table.insert(list, name) end
+            end
+        end
+    end
+    if #list == 0 then table.insert(list, "default") end
+    return list
+end
+
 local function saveConfig()
+    ensureConfigDir()
     local data = {
         espKiller = ESP_KILLER,
         espPallet = ESP_PALLET,
@@ -127,45 +168,47 @@ local function saveConfig()
     }
     local json = game:GetService("HttpService"):JSONEncode(data)
     if writefile then
-        pcall(function() writefile(CONFIG_FILE, json) end)
+        pcall(function() writefile(getConfigPath(CURRENT_CONFIG_NAME), json) end)
     end
-    _G.BRUTAL_CONFIG_RAW = json
 end
 
-local function loadConfig()
-    local json
-    if _G.BRUTAL_CONFIG_RAW then
-        json = _G.BRUTAL_CONFIG_RAW
-    elseif readfile and isfile and isfile(CONFIG_FILE) then
-        local ok, content = pcall(function() return readfile(CONFIG_FILE) end)
-        if ok then json = content end
-    end
-    if not json then return end
-    local ok, data = pcall(function()
+local function applyConfigData(data)
+    if not data then return end
+    ESP_KILLER = data.espKiller or ESP_KILLER
+    ESP_PALLET = data.espPallet or ESP_PALLET
+    ESP_GENERATOR = data.espGenerator or ESP_GENERATOR
+    ESP_DISTANCE = data.espDistance ~= nil and data.espDistance or ESP_DISTANCE
+    AUTO_PARRY = data.autoParry or AUTO_PARRY
+    PARRY_RADIUS = data.parryRadius or PARRY_RADIUS
+    FLY_ENABLED = data.fly or FLY_ENABLED
+    FLY_SPEED = data.flySpeed or FLY_SPEED
+    NOCLIP_ENABLED = data.noclip or NOCLIP_ENABLED
+    SPEED_ENABLED = data.speed or SPEED_ENABLED
+    SPEED_VALUE = data.speedValue or SPEED_VALUE
+    JUMP_ENABLED = data.jump or JUMP_ENABLED
+    JUMP_VALUE = data.jumpValue or JUMP_VALUE
+    MOONWALK_ENABLED = data.moonwalk or MOONWALK_ENABLED
+    MOONWALK_SPEED = data.moonwalkSpeed or MOONWALK_SPEED
+    MOONWALK_SIDE_INTERVAL = data.moonwalkSideInterval or MOONWALK_SIDE_INTERVAL
+    MOONWALK_TURN_SPEED = data.moonwalkTurnSpeed or MOONWALK_TURN_SPEED
+    NO_FALL_ENABLED = data.noFall or NO_FALL_ENABLED
+    NO_SLOWED_ENABLED = data.noSlowed or NO_SLOWED_ENABLED
+    FOV_ENABLED = data.fovEnabled or FOV_ENABLED
+    FOV_VALUE = data.fovValue or FOV_VALUE
+end
+
+local function loadConfigByName(name)
+    if not (readfile and isfile) then return end
+    local path = getConfigPath(name)
+    if not isfile(path) then return end
+    local ok, json = pcall(function() return readfile(path) end)
+    if not ok or not json then return end
+    local ok2, data = pcall(function()
         return game:GetService("HttpService"):JSONDecode(json)
     end)
-    if ok and data then
-        ESP_KILLER = data.espKiller or ESP_KILLER
-        ESP_PALLET = data.espPallet or ESP_PALLET
-        ESP_GENERATOR = data.espGenerator or ESP_GENERATOR
-        ESP_DISTANCE = data.espDistance ~= nil and data.espDistance or ESP_DISTANCE
-        AUTO_PARRY = data.autoParry or AUTO_PARRY
-        PARRY_RADIUS = data.parryRadius or PARRY_RADIUS
-        FLY_ENABLED = data.fly or FLY_ENABLED
-        FLY_SPEED = data.flySpeed or FLY_SPEED
-        NOCLIP_ENABLED = data.noclip or NOCLIP_ENABLED
-        SPEED_ENABLED = data.speed or SPEED_ENABLED
-        SPEED_VALUE = data.speedValue or SPEED_VALUE
-        JUMP_ENABLED = data.jump or JUMP_ENABLED
-        JUMP_VALUE = data.jumpValue or JUMP_VALUE
-        MOONWALK_ENABLED = data.moonwalk or MOONWALK_ENABLED
-        MOONWALK_SPEED = data.moonwalkSpeed or MOONWALK_SPEED
-        MOONWALK_SIDE_INTERVAL = data.moonwalkSideInterval or MOONWALK_SIDE_INTERVAL
-        MOONWALK_TURN_SPEED = data.moonwalkTurnSpeed or MOONWALK_TURN_SPEED
-        NO_FALL_ENABLED = data.noFall or NO_FALL_ENABLED
-        NO_SLOWED_ENABLED = data.noSlowed or NO_SLOWED_ENABLED
-        FOV_ENABLED = data.fovEnabled or FOV_ENABLED
-        FOV_VALUE = data.fovValue or FOV_VALUE
+    if ok2 and data then
+        applyConfigData(data)
+        CURRENT_CONFIG_NAME = name
     end
 end
 
@@ -227,6 +270,29 @@ end
 local function track(conn)
     table.insert(connections, conn)
     return conn
+end
+
+local function playLoadSound()
+    local sound = Instance.new("Sound")
+    sound.SoundId = "rbxassetid://9114221325"
+    sound.Volume = 0.5
+    sound.PlaybackSpeed = 1.1
+    sound.Parent = SoundService
+    sound:Play()
+    task.delay(3, function()
+        if sound then sound:Destroy() end
+    end)
+end
+
+local function playClickSound()
+    local sound = Instance.new("Sound")
+    sound.SoundId = "rbxassetid://7242840436"
+    sound.Volume = 0.3
+    sound.Parent = SoundService
+    sound:Play()
+    task.delay(1, function()
+        if sound then sound:Destroy() end
+    end)
 end
 
 local loadingGui = Instance.new("ScreenGui")
@@ -354,7 +420,7 @@ title.Parent = topBar
 local minimizeBtn = Instance.new("TextButton")
 minimizeBtn.Size = UDim2.new(0, 32, 0, 32)
 minimizeBtn.Position = UDim2.new(1, -75, 0.5, -16)
-minimizeBtn.BackgroundColor3 = Color3.fromRGB(45, 45, 45)
+minimizeBtn.BackgroundColor3 = BTN_NEUTRAL
 minimizeBtn.Text = "—"
 minimizeBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
 minimizeBtn.Font = Enum.Font.GothamBold
@@ -367,7 +433,7 @@ minCorner.Parent = minimizeBtn
 local closeBtn = Instance.new("TextButton")
 closeBtn.Size = UDim2.new(0, 32, 0, 32)
 closeBtn.Position = UDim2.new(1, -40, 0.5, -16)
-closeBtn.BackgroundColor3 = Color3.fromRGB(180, 30, 30)
+closeBtn.BackgroundColor3 = BTN_DANGER
 closeBtn.Text = "×"
 closeBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
 closeBtn.Font = Enum.Font.GothamBold
@@ -400,7 +466,7 @@ local tabButtons = {}
 for i, name in ipairs(tabNames) do
     local tab = Instance.new("TextButton")
     tab.Size = UDim2.new(0.155, 0, 0, 30)
-    tab.BackgroundColor3 = (i == 1) and Color3.fromRGB(60, 60, 60) or Color3.fromRGB(30, 30, 30)
+    tab.BackgroundColor3 = (i == 1) and BTN_ACTIVE or BTN_NEUTRAL
     tab.Text = name
     tab.TextColor3 = Color3.fromRGB(255, 255, 255)
     tab.Font = Enum.Font.GothamBold
@@ -419,7 +485,7 @@ local function createPage()
     page.BackgroundTransparency = 1
     page.BorderSizePixel = 0
     page.ScrollBarThickness = 5
-    page.ScrollBarImageColor3 = Color3.fromRGB(255, 255, 255)
+    page.ScrollBarImageColor3 = Color3.fromRGB(180, 180, 180)
     page.CanvasSize = UDim2.new(0, 0, 0, 500)
     page.Visible = false
     page.Parent = mainFrame
@@ -446,12 +512,15 @@ local function switchTab(name)
     configPage.Visible = (name == "Config")
     bindsPage.Visible = (name == "Binds")
     for n, btn in pairs(tabButtons) do
-        btn.BackgroundColor3 = (n == name) and Color3.fromRGB(60, 60, 60) or Color3.fromRGB(30, 30, 30)
+        btn.BackgroundColor3 = (n == name) and BTN_ACTIVE or BTN_NEUTRAL
     end
 end
 
 for name, btn in pairs(tabButtons) do
-    btn.MouseButton1Click:Connect(function() switchTab(name) end)
+    btn.MouseButton1Click:Connect(function()
+        playClickSound()
+        switchTab(name)
+    end)
 end
 
 local function updateBindLabel(id, state)
@@ -509,11 +578,20 @@ local bindActions = {
     end,
 }
 
+local function addHoverEffect(btn, baseColor)
+    btn.MouseEnter:Connect(function()
+        btn.BackgroundColor3 = BTN_HOVER
+    end)
+    btn.MouseLeave:Connect(function()
+        btn.BackgroundColor3 = baseColor
+    end)
+end
+
 local function createStateButton(parent, text, getState, setState)
     local btn = Instance.new("TextButton")
     btn.Size = UDim2.new(0.9, 0, 0, 36)
     btn.Position = UDim2.new(0.05, 0, 0, 0)
-    btn.BackgroundColor3 = Color3.fromRGB(40, 40, 40)
+    btn.BackgroundColor3 = getState() and BTN_ACTIVE or BTN_NEUTRAL
     btn.Text = text .. "   [" .. (getState() and "ON" or "OFF") .. "]"
     btn.TextColor3 = Color3.fromRGB(255, 255, 255)
     btn.Font = Enum.Font.GothamBold
@@ -523,7 +601,7 @@ local function createStateButton(parent, text, getState, setState)
     c.CornerRadius = UDim.new(0, 8)
     c.Parent = btn
     local s = Instance.new("UIStroke")
-    s.Color = getState() and Color3.fromRGB(255, 255, 255) or Color3.fromRGB(80, 80, 80)
+    s.Color = getState() and BTN_ACCENT or Color3.fromRGB(60, 60, 60)
     s.Thickness = 1
     s.Parent = btn
 
@@ -531,16 +609,24 @@ local function createStateButton(parent, text, getState, setState)
         local state = getState()
         btn.Text = text .. "   [" .. (state and "ON" or "OFF") .. "]"
         if state then
-            btn.BackgroundColor3 = Color3.fromRGB(60, 60, 60)
-            s.Color = Color3.fromRGB(255, 255, 255)
+            btn.BackgroundColor3 = BTN_ACTIVE
+            s.Color = BTN_ACCENT
         else
-            btn.BackgroundColor3 = Color3.fromRGB(40, 40, 40)
-            s.Color = Color3.fromRGB(80, 80, 80)
+            btn.BackgroundColor3 = BTN_NEUTRAL
+            s.Color = Color3.fromRGB(60, 60, 60)
         end
     end
 
     btn.MouseButton1Click:Connect(function()
+        playClickSound()
         setState(not getState())
+        refresh()
+    end)
+
+    btn.MouseEnter:Connect(function()
+        btn.BackgroundColor3 = BTN_HOVER
+    end)
+    btn.MouseLeave:Connect(function()
         refresh()
     end)
 
@@ -552,14 +638,14 @@ local function createCollapsible(parent, titleText, buildContent)
     local container = Instance.new("Frame")
     container.Size = UDim2.new(1, 0, 0, 40)
     container.Position = UDim2.new(0, 0, 0, 0)
-    container.BackgroundColor3 = Color3.fromRGB(30, 30, 30)
+    container.BackgroundColor3 = Color3.fromRGB(28, 28, 28)
     container.BorderSizePixel = 0
     container.Parent = parent
     local cc = Instance.new("UICorner")
     cc.CornerRadius = UDim.new(0, 10)
     cc.Parent = container
     local cs = Instance.new("UIStroke")
-    cs.Color = Color3.fromRGB(80, 80, 80)
+    cs.Color = Color3.fromRGB(70, 70, 70)
     cs.Thickness = 1
     cs.Parent = container
 
@@ -593,6 +679,7 @@ local function createCollapsible(parent, titleText, buildContent)
     buildContent(content)
 
     btn.MouseButton1Click:Connect(function()
+        playClickSound()
         expanded = not expanded
         content.Visible = expanded
         if expanded then
@@ -602,6 +689,13 @@ local function createCollapsible(parent, titleText, buildContent)
         end
     end)
 
+    btn.MouseEnter:Connect(function()
+        container.BackgroundColor3 = Color3.fromRGB(38, 38, 38)
+    end)
+    btn.MouseLeave:Connect(function()
+        container.BackgroundColor3 = Color3.fromRGB(28, 28, 28)
+    end)
+
     return container, content, btn
 end
 
@@ -609,14 +703,14 @@ local function createSlider(parent, text, minVal, maxVal, defaultVal, callback)
     local container = Instance.new("Frame")
     container.Size = UDim2.new(0.9, 0, 0, 50)
     container.Position = UDim2.new(0.05, 0, 0, 0)
-    container.BackgroundColor3 = Color3.fromRGB(40, 40, 40)
+    container.BackgroundColor3 = BTN_NEUTRAL
     container.BorderSizePixel = 0
     container.Parent = parent
     local cc = Instance.new("UICorner")
     cc.CornerRadius = UDim.new(0, 10)
     cc.Parent = container
     local cs = Instance.new("UIStroke")
-    cs.Color = Color3.fromRGB(80, 80, 80)
+    cs.Color = Color3.fromRGB(70, 70, 70)
     cs.Thickness = 1
     cs.Parent = container
 
@@ -634,7 +728,7 @@ local function createSlider(parent, text, minVal, maxVal, defaultVal, callback)
     local sliderBg = Instance.new("Frame")
     sliderBg.Size = UDim2.new(0.9, 0, 0, 8)
     sliderBg.Position = UDim2.new(0.05, 0, 0, 30)
-    sliderBg.BackgroundColor3 = Color3.fromRGB(60, 60, 60)
+    sliderBg.BackgroundColor3 = Color3.fromRGB(55, 55, 55)
     sliderBg.BorderSizePixel = 0
     sliderBg.Parent = container
     local sbCorner = Instance.new("UICorner")
@@ -643,7 +737,7 @@ local function createSlider(parent, text, minVal, maxVal, defaultVal, callback)
 
     local fill = Instance.new("Frame")
     fill.Size = UDim2.new((defaultVal - minVal) / (maxVal - minVal), 0, 1, 0)
-    fill.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
+    fill.BackgroundColor3 = BTN_ACCENT
     fill.BorderSizePixel = 0
     fill.Parent = sliderBg
     local fillCorner = Instance.new("UICorner")
@@ -699,7 +793,7 @@ local function createSectionLabel(parent, text)
     label.Position = UDim2.new(0.05, 0, 0, 0)
     label.BackgroundTransparency = 1
     label.Text = text
-    label.TextColor3 = Color3.fromRGB(180, 180, 180)
+    label.TextColor3 = Color3.fromRGB(160, 160, 160)
     label.Font = Enum.Font.GothamBold
     label.TextSize = 12
     label.TextXAlignment = Enum.TextXAlignment.Left
@@ -710,7 +804,7 @@ local function createBindButton(parent, id, text)
     local btn = Instance.new("TextButton")
     btn.Size = UDim2.new(1, 0, 0, 40)
     btn.Position = UDim2.new(0, 0, 0, 0)
-    btn.BackgroundColor3 = Color3.fromRGB(40, 40, 40)
+    btn.BackgroundColor3 = BTN_NEUTRAL
     btn.Text = text .. ": " .. getKeyName(BINDS[id])
     btn.TextColor3 = Color3.fromRGB(255, 255, 255)
     btn.Font = Enum.Font.GothamBold
@@ -720,16 +814,26 @@ local function createBindButton(parent, id, text)
     c.CornerRadius = UDim.new(0, 8)
     c.Parent = btn
     local s = Instance.new("UIStroke")
-    s.Color = Color3.fromRGB(80, 80, 80)
+    s.Color = Color3.fromRGB(70, 70, 70)
     s.Thickness = 1
     s.Parent = btn
 
     bindLabels[id] = btn
 
     btn.MouseButton1Click:Connect(function()
+        playClickSound()
         bindingMode = id
         btn.Text = text .. ": НАЖМИ КЛАВИШУ..."
         btn.BackgroundColor3 = Color3.fromRGB(80, 60, 20)
+    end)
+
+    btn.MouseEnter:Connect(function()
+        btn.BackgroundColor3 = BTN_HOVER
+    end)
+    btn.MouseLeave:Connect(function()
+        if bindingMode ~= id then
+            btn.BackgroundColor3 = BTN_NEUTRAL
+        end
     end)
 end
 
@@ -747,12 +851,90 @@ local function createActionButton(parent, text, color, callback)
     c.CornerRadius = UDim.new(0, 8)
     c.Parent = btn
     local s = Instance.new("UIStroke")
-    s.Color = Color3.fromRGB(120, 120, 120)
+    s.Color = Color3.fromRGB(90, 90, 90)
     s.Thickness = 1
     s.Parent = btn
 
-    btn.MouseButton1Click:Connect(callback)
+    btn.MouseButton1Click:Connect(function()
+        playClickSound()
+        callback()
+    end)
+    btn.MouseEnter:Connect(function()
+        btn.BackgroundColor3 = color:Lerp(Color3.new(1,1,1), 0.15)
+    end)
+    btn.MouseLeave:Connect(function()
+        btn.BackgroundColor3 = color
+    end)
     return btn
+end
+
+local function createTextBox(parent, placeholder, defaultText, callback)
+    local box = Instance.new("TextBox")
+    box.Size = UDim2.new(0.9, 0, 0, 36)
+    box.Position = UDim2.new(0.05, 0, 0, 0)
+    box.BackgroundColor3 = BTN_NEUTRAL
+    box.Text = defaultText or ""
+    box.PlaceholderText = placeholder or ""
+    box.PlaceholderColor3 = Color3.fromRGB(140, 140, 140)
+    box.TextColor3 = Color3.fromRGB(255, 255, 255)
+    box.Font = Enum.Font.GothamBold
+    box.TextSize = 13
+    box.ClearTextOnFocus = false
+    box.Parent = parent
+    local c = Instance.new("UICorner")
+    c.CornerRadius = UDim.new(0, 8)
+    c.Parent = box
+    local s = Instance.new("UIStroke")
+    s.Color = Color3.fromRGB(70, 70, 70)
+    s.Thickness = 1
+    s.Parent = box
+
+    box.FocusLost:Connect(function()
+        callback(box.Text)
+    end)
+    return box
+end
+
+local configListHolder
+local function refreshConfigList()
+    if not configListHolder then return end
+    for _, child in ipairs(configListHolder:GetChildren()) do
+        if child:IsA("TextButton") then
+            child:Destroy()
+        end
+    end
+    local configs = listConfigs()
+    for _, name in ipairs(configs) do
+        local btn = Instance.new("TextButton")
+        btn.Size = UDim2.new(0.9, 0, 0, 32)
+        btn.Position = UDim2.new(0.05, 0, 0, 0)
+        btn.BackgroundColor3 = (name == CURRENT_CONFIG_NAME) and BTN_ACCENT or BTN_NEUTRAL
+        btn.Text = name .. (name == CURRENT_CONFIG_NAME and "  [ACTIVE]" or "")
+        btn.TextColor3 = Color3.fromRGB(255, 255, 255)
+        btn.Font = Enum.Font.GothamBold
+        btn.TextSize = 12
+        btn.Parent = configListHolder
+        local c = Instance.new("UICorner")
+        c.CornerRadius = UDim.new(0, 8)
+        c.Parent = btn
+        local s = Instance.new("UIStroke")
+        s.Color = Color3.fromRGB(70, 70, 70)
+        s.Thickness = 1
+        s.Parent = btn
+
+        btn.MouseButton1Click:Connect(function()
+            playClickSound()
+            loadConfigByName(name)
+            saveConfig()
+            refreshConfigList()
+        end)
+        btn.MouseEnter:Connect(function()
+            btn.BackgroundColor3 = BTN_HOVER
+        end)
+        btn.MouseLeave:Connect(function()
+            btn.BackgroundColor3 = (name == CURRENT_CONFIG_NAME) and BTN_ACCENT or BTN_NEUTRAL
+        end)
+    end
 end
 
 local function createHighlight(adornee, color)
@@ -1175,7 +1357,7 @@ track(UserInputService.InputBegan:Connect(function(input, gpe)
             local btn = bindLabels[bindingMode]
             if btn then
                 btn.Text = bindingMode .. ": " .. getKeyName(input.KeyCode)
-                btn.BackgroundColor3 = Color3.fromRGB(40, 40, 40)
+                btn.BackgroundColor3 = BTN_NEUTRAL
             end
             bindingMode = nil
             saveBinds()
@@ -1191,6 +1373,7 @@ track(UserInputService.InputBegan:Connect(function(input, gpe)
 end))
 
 minimizeBtn.MouseButton1Click:Connect(function()
+    playClickSound()
     menuMinimized = not menuMinimized
     if menuMinimized then
         for _, page in ipairs({espPage, visualPage, survivorPage, movementPage, configPage, bindsPage}) do
@@ -1208,6 +1391,7 @@ minimizeBtn.MouseButton1Click:Connect(function()
 end)
 
 closeBtn.MouseButton1Click:Connect(function()
+    playClickSound()
     _G.mainFrame = nil
     screenGui:Destroy()
     for _, c in ipairs(connections) do
@@ -1348,21 +1532,38 @@ createCollapsible(movementPage, "Moonwalk", function(content)
     end)
 end)
 
-createSectionLabel(configPage, "Configuration")
-createActionButton(configPage, "Save Config", Color3.fromRGB(30, 130, 30), function()
-    saveConfig()
+createSectionLabel(configPage, "Config Name")
+createTextBox(configPage, "Enter config name", CURRENT_CONFIG_NAME, function(text)
+    if text and text ~= "" then
+        CURRENT_CONFIG_NAME = text
+        saveConfig()
+        refreshConfigList()
+    end
 end)
-createActionButton(configPage, "Load Config", Color3.fromRGB(30, 80, 150), function()
-    loadConfig()
+
+createSectionLabel(configPage, "Saved Configs")
+configListHolder = Instance.new("Frame")
+configListHolder.Size = UDim2.new(0.9, 0, 0, 200)
+configListHolder.Position = UDim2.new(0.05, 0, 0, 0)
+configListHolder.BackgroundTransparency = 1
+configListHolder.Parent = configPage
+local chLayout = Instance.new("UIListLayout")
+chLayout.Padding = UDim.new(0, 6)
+chLayout.SortOrder = Enum.SortOrder.LayoutOrder
+chLayout.Parent = configListHolder
+
+createActionButton(configPage, "Save Current", BTN_SUCCESS, function()
     saveConfig()
-    closeBtn.MouseButton1Click:Fire()
+    refreshConfigList()
 end)
-createActionButton(configPage, "Reset Config", Color3.fromRGB(150, 40, 40), function()
+createActionButton(configPage, "Reset Current", BTN_DANGER, function()
     resetConfig()
+    refreshConfigList()
+end)
+createActionButton(configPage, "Reload Current", BTN_INFO, function()
+    loadConfigByName(CURRENT_CONFIG_NAME)
     saveConfig()
 end)
-createSectionLabel(configPage, "Config saves to file on your executor")
-createSectionLabel(configPage, "brutal_config.json")
 
 createSectionLabel(bindsPage, "Keybinds (click to rebind)")
 createBindButton(bindsPage, "toggleMenu", "Toggle Menu")
@@ -1376,11 +1577,11 @@ createBindButton(bindsPage, "speed", "Speed")
 createBindButton(bindsPage, "moonwalk", "Moonwalk")
 
 loadBinds()
-loadConfig()
-saveConfig()
+loadConfigByName(CURRENT_CONFIG_NAME)
 for id, _ in pairs(BINDS) do
     updateBindLabel(id, false)
 end
+refreshConfigList()
 
 task.spawn(function()
     for i = 0, 100 do
@@ -1389,6 +1590,7 @@ task.spawn(function()
         task.wait(0.02)
     end
     task.wait(0.3)
+    playLoadSound()
     loadingGui:Destroy()
     screenGui.Enabled = true
     mainFrame.Size = UDim2.new(0, 0, 0, 0)
