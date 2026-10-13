@@ -2,6 +2,7 @@ local Players = game:GetService("Players")
 local RunService = game:GetService("RunService")
 local Workspace = game:GetService("Workspace")
 local UserInputService = game:GetService("UserInputService")
+local VirtualInputManager = game:GetService("VirtualInputManager")
 local Lighting = game:GetService("Lighting")
 local LocalPlayer = Players.LocalPlayer
 
@@ -10,6 +11,19 @@ local ESP_PALLET = false
 local ESP_GENERATOR = false
 local AUTO_PARRY = false
 local PARRY_RADIUS = 15
+local PARRY_KEY = Enum.KeyCode.Q
+local PARRY_COOLDOWN = 0.5
+local lastParry = 0
+
+local ESP_DISTANCE = true
+local SPEED_ENABLED = false
+local SPEED_VALUE = 32
+local JUMP_ENABLED = false
+local JUMP_VALUE = 80
+local NOCLIP_ENABLED = false
+local FLY_ENABLED = false
+local FLY_SPEED = 50
+local INFINITE_JUMP = false
 
 local KILLER_COLOR = Color3.fromRGB(255, 0, 0)
 local PALLET_COLOR = Color3.fromRGB(255, 255, 255)
@@ -36,8 +50,8 @@ screenGui.ResetOnSpawn = false
 screenGui.Parent = game.CoreGui
 
 local mainFrame = Instance.new("Frame")
-mainFrame.Size = UDim2.new(0, 380, 0, 540)
-mainFrame.Position = UDim2.new(0, 30, 0.5, -270)
+mainFrame.Size = UDim2.new(0, 380, 0, 560)
+mainFrame.Position = UDim2.new(0, 30, 0.5, -280)
 mainFrame.BackgroundColor3 = Color3.fromRGB(15, 15, 15)
 mainFrame.BorderSizePixel = 0
 mainFrame.Active = true
@@ -119,40 +133,52 @@ tabLayout.HorizontalAlignment = Enum.HorizontalAlignment.Center
 tabLayout.Parent = tabBar
 
 local espTab = Instance.new("TextButton")
-espTab.Size = UDim2.new(0.3, 0, 0, 30)
+espTab.Size = UDim2.new(0.22, 0, 0, 30)
 espTab.BackgroundColor3 = Color3.fromRGB(60, 60, 60)
 espTab.Text = "ESP"
 espTab.TextColor3 = Color3.fromRGB(255, 255, 255)
 espTab.Font = Enum.Font.GothamBold
-espTab.TextSize = 13
+espTab.TextSize = 12
 espTab.Parent = tabBar
 local espTabCorner = Instance.new("UICorner")
 espTabCorner.CornerRadius = UDim.new(0, 8)
 espTabCorner.Parent = espTab
 
 local visualTab = Instance.new("TextButton")
-visualTab.Size = UDim2.new(0.3, 0, 0, 30)
+visualTab.Size = UDim2.new(0.22, 0, 0, 30)
 visualTab.BackgroundColor3 = Color3.fromRGB(30, 30, 30)
 visualTab.Text = "Visual"
 visualTab.TextColor3 = Color3.fromRGB(255, 255, 255)
 visualTab.Font = Enum.Font.GothamBold
-visualTab.TextSize = 13
+visualTab.TextSize = 12
 visualTab.Parent = tabBar
 local visualTabCorner = Instance.new("UICorner")
 visualTabCorner.CornerRadius = UDim.new(0, 8)
 visualTabCorner.Parent = visualTab
 
 local survivorTab = Instance.new("TextButton")
-survivorTab.Size = UDim2.new(0.3, 0, 0, 30)
+survivorTab.Size = UDim2.new(0.22, 0, 0, 30)
 survivorTab.BackgroundColor3 = Color3.fromRGB(30, 30, 30)
 survivorTab.Text = "Survivor"
 survivorTab.TextColor3 = Color3.fromRGB(255, 255, 255)
 survivorTab.Font = Enum.Font.GothamBold
-survivorTab.TextSize = 13
+survivorTab.TextSize = 12
 survivorTab.Parent = tabBar
 local survivorTabCorner = Instance.new("UICorner")
 survivorTabCorner.CornerRadius = UDim.new(0, 8)
 survivorTabCorner.Parent = survivorTab
+
+local movementTab = Instance.new("TextButton")
+movementTab.Size = UDim2.new(0.22, 0, 0, 30)
+movementTab.BackgroundColor3 = Color3.fromRGB(30, 30, 30)
+movementTab.Text = "Movement"
+movementTab.TextColor3 = Color3.fromRGB(255, 255, 255)
+movementTab.Font = Enum.Font.GothamBold
+movementTab.TextSize = 12
+movementTab.Parent = tabBar
+local movementTabCorner = Instance.new("UICorner")
+movementTabCorner.CornerRadius = UDim.new(0, 8)
+movementTabCorner.Parent = movementTab
 
 local espPage = Instance.new("ScrollingFrame")
 espPage.Size = UDim2.new(1, -20, 1, -165)
@@ -202,18 +228,37 @@ survivorLayout.Padding = UDim.new(0, 8)
 survivorLayout.SortOrder = Enum.SortOrder.LayoutOrder
 survivorLayout.Parent = survivorPage
 
+local movementPage = Instance.new("ScrollingFrame")
+movementPage.Size = UDim2.new(1, -20, 1, -165)
+movementPage.Position = UDim2.new(0, 10, 0, 105)
+movementPage.BackgroundTransparency = 1
+movementPage.BorderSizePixel = 0
+movementPage.ScrollBarThickness = 5
+movementPage.ScrollBarImageColor3 = Color3.fromRGB(255, 255, 255)
+movementPage.CanvasSize = UDim2.new(0, 0, 0, 500)
+movementPage.Visible = false
+movementPage.Parent = mainFrame
+
+local movementLayout = Instance.new("UIListLayout")
+movementLayout.Padding = UDim.new(0, 8)
+movementLayout.SortOrder = Enum.SortOrder.LayoutOrder
+movementLayout.Parent = movementPage
+
 local function switchTab(tabName)
     espPage.Visible = (tabName == "esp")
     visualPage.Visible = (tabName == "visual")
     survivorPage.Visible = (tabName == "survivor")
+    movementPage.Visible = (tabName == "movement")
     espTab.BackgroundColor3 = (tabName == "esp") and Color3.fromRGB(60, 60, 60) or Color3.fromRGB(30, 30, 30)
     visualTab.BackgroundColor3 = (tabName == "visual") and Color3.fromRGB(60, 60, 60) or Color3.fromRGB(30, 30, 30)
     survivorTab.BackgroundColor3 = (tabName == "survivor") and Color3.fromRGB(60, 60, 60) or Color3.fromRGB(30, 30, 30)
+    movementTab.BackgroundColor3 = (tabName == "movement") and Color3.fromRGB(60, 60, 60) or Color3.fromRGB(30, 30, 30)
 end
 
 espTab.MouseButton1Click:Connect(function() switchTab("esp") end)
 visualTab.MouseButton1Click:Connect(function() switchTab("visual") end)
 survivorTab.MouseButton1Click:Connect(function() switchTab("survivor") end)
+movementTab.MouseButton1Click:Connect(function() switchTab("movement") end)
 
 local function createToggle(parent, text, callback)
     local btn = Instance.new("TextButton")
@@ -582,6 +627,15 @@ local function isGenerator(obj)
     return true
 end
 
+local function getDistance(root)
+    local myChar = LocalPlayer.Character
+    local myRoot = myChar and myChar:FindFirstChild("HumanoidRootPart")
+    if myRoot and root then
+        return math.floor((myRoot.Position - root.Position).Magnitude)
+    end
+    return nil
+end
+
 local function clearKillerESP()
     for plr, esp in pairs(killerESP) do
         if esp.h then esp.h:Destroy() end
@@ -615,20 +669,23 @@ local function updateKillerESP()
         local root = char and char:FindFirstChild("HumanoidRootPart")
         local hum = char and char:FindFirstChildOfClass("Humanoid")
         if char and root and hum and hum.Health > 0 and isKiller(plr) then
+            local distText = ESP_DISTANCE and (" [" .. (getDistance(root) or "?") .. "m]") or ""
             if not killerESP[plr] then
                 local h = createHighlight(char, KILLER_COLOR)
-                local bg, label = createNameTag(root, plr.Name, KILLER_COLOR, 110)
-                killerESP[plr] = { h = h, bg = bg, label = label, char = char }
+                local bg, label = createNameTag(root, plr.Name .. distText, KILLER_COLOR, 110)
+                killerESP[plr] = { h = h, bg = bg, label = label, char = char, root = root }
             else
                 local e = killerESP[plr]
                 if e.char ~= char then
                     e.bg.Adornee = root
                     e.h.Adornee = char
                     e.char = char
+                    e.root = root
                 end
                 e.h.FillColor = KILLER_COLOR
                 e.h.OutlineColor = KILLER_COLOR
                 e.label.TextColor3 = KILLER_COLOR
+                e.label.Text = plr.Name .. distText
             end
         else
             if killerESP[plr] then
@@ -729,12 +786,115 @@ table.insert(loops, task.spawn(function()
         if AUTO_PARRY then
             local dist = getDistanceToKiller()
             if dist and dist <= PARRY_RADIUS then
-                pcall(function()
-                    local vim = game:GetService("VirtualInputManager")
-                    vim:SendKeyEvent(true, Enum.KeyCode.Q, false, game)
-                    task.wait(0.05)
-                    vim:SendKeyEvent(false, Enum.KeyCode.Q, false, game)
-                end)
+                if tick() - lastParry >= PARRY_COOLDOWN then
+                    lastParry = tick()
+                    pcall(function()
+                        VirtualInputManager:SendKeyEvent(true, PARRY_KEY, false, game)
+                        task.wait(0.05)
+                        VirtualInputManager:SendKeyEvent(false, PARRY_KEY, false, game)
+                    end)
+                end
+            end
+        end
+    end
+end))
+
+table.insert(loops, task.spawn(function()
+    while task.wait(0.5) do
+        local char = LocalPlayer.Character
+        local hum = char and char:FindFirstChildOfClass("Humanoid")
+        if hum then
+            if SPEED_ENABLED then
+                hum.WalkSpeed = SPEED_VALUE
+            else
+                hum.WalkSpeed = 16
+            end
+            if JUMP_ENABLED then
+                hum.UseJumpPower = true
+                hum.JumpPower = JUMP_VALUE
+            end
+        end
+    end
+end))
+
+track(RunService.Stepped:Connect(function()
+    if not NOCLIP_ENABLED then return end
+    local char = LocalPlayer.Character
+    if char then
+        for _, part in ipairs(char:GetChildren()) do
+            if part:IsA("BasePart") and part.CanCollide then
+                part.CanCollide = false
+            end
+        end
+    end
+end))
+
+local flyBodyVelocity
+local flyBodyGyro
+
+local function startFly()
+    local char = LocalPlayer.Character
+    local root = char and char:FindFirstChild("HumanoidRootPart")
+    if not root then return end
+    flyBodyVelocity = Instance.new("BodyVelocity")
+    flyBodyVelocity.MaxForce = Vector3.new(math.huge, math.huge, math.huge)
+    flyBodyVelocity.Velocity = Vector3.new(0, 0, 0)
+    flyBodyVelocity.Parent = root
+    flyBodyGyro = Instance.new("BodyGyro")
+    flyBodyGyro.MaxTorque = Vector3.new(math.huge, math.huge, math.huge)
+    flyBodyGyro.P = 1000
+    flyBodyGyro.D = 50
+    flyBodyGyro.CFrame = root.CFrame
+    flyBodyGyro.Parent = root
+end
+
+local function stopFly()
+    if flyBodyVelocity then flyBodyVelocity:Destroy() flyBodyVelocity = nil end
+    if flyBodyGyro then flyBodyGyro:Destroy() flyBodyGyro = nil end
+end
+
+local flyConn
+local function updateFly()
+    if not FLY_ENABLED then return end
+    local char = LocalPlayer.Character
+    local root = char and char:FindFirstChild("HumanoidRootPart")
+    if not root or not flyBodyVelocity or not flyBodyGyro then return end
+    local cam = Workspace.CurrentCamera
+    local moveDir = Vector3.new(0, 0, 0)
+    if UserInputService:IsKeyDown(Enum.KeyCode.W) then moveDir = moveDir + cam.CFrame.LookVector end
+    if UserInputService:IsKeyDown(Enum.KeyCode.S) then moveDir = moveDir - cam.CFrame.LookVector end
+    if UserInputService:IsKeyDown(Enum.KeyCode.A) then moveDir = moveDir - cam.CFrame.RightVector end
+    if UserInputService:IsKeyDown(Enum.KeyCode.D) then moveDir = moveDir + cam.CFrame.RightVector end
+    if UserInputService:IsKeyDown(Enum.KeyCode.Space) then moveDir = moveDir + Vector3.new(0, 1, 0) end
+    if UserInputService:IsKeyDown(Enum.KeyCode.LeftControl) then moveDir = moveDir - Vector3.new(0, 1, 0) end
+    if moveDir.Magnitude > 0 then
+        flyBodyVelocity.Velocity = moveDir.Unit * FLY_SPEED
+    else
+        flyBodyVelocity.Velocity = Vector3.new(0, 0, 0)
+    end
+    flyBodyGyro.CFrame = cam.CFrame
+end
+
+flyConn = RunService.RenderStepped:Connect(updateFly)
+track(flyConn)
+
+table.insert(loops, task.spawn(function()
+    while task.wait(0.1) do
+        if FLY_ENABLED then
+            if not flyBodyVelocity then startFly() end
+        else
+            if flyBodyVelocity then stopFly() end
+        end
+    end
+end))
+
+table.insert(loops, task.spawn(function()
+    while task.wait(0.1) do
+        if INFINITE_JUMP then
+            local char = LocalPlayer.Character
+            local hum = char and char:FindFirstChildOfClass("Humanoid")
+            if hum then
+                hum:ChangeState(Enum.HumanoidStateType.Jumping)
             end
         end
     end
@@ -744,25 +904,44 @@ createExpandableESP(espPage, "ESP Убийцы", "Включить", function(v)
 createExpandableESP(espPage, "ESP Палеток", "Включить", function(v) ESP_PALLET = v end, "Цвет", function(c) PALLET_COLOR = c end)
 createExpandableESP(espPage, "ESP Генераторов", "Включить", function(v) ESP_GENERATOR = v end, "Цвет", function(c) GENERATOR_COLOR = c end)
 
-createSectionLabel(visualPage, "НАСТРОЙКИ FOV")
+createSectionLabel(espPage, "ДОПОЛНИТЕЛЬНО")
+createToggle(espPage, "Показывать дистанцию", function(v) ESP_DISTANCE = v end)
 
+createSectionLabel(visualPage, "НАСТРОЙКИ FOV")
 createDropdownSlider(visualPage, "FOV", 30, 120, 70, function(v)
     currentFOV = v
     Workspace.CurrentCamera.FieldOfView = v
 end)
-
 createToggle(visualPage, "Зафиксировать FOV", function(v)
     fovLocked = v
 end)
 
 createSectionLabel(survivorPage, "AUTO PARRY")
-
-createToggle(survivorPage, "Auto Parry (радиус " .. PARRY_RADIUS .. ")", function(v)
-    AUTO_PARRY = v
-end)
-
+createToggle(survivorPage, "Auto Parry", function(v) AUTO_PARRY = v end)
 createDropdownSlider(survivorPage, "Радиус Parry", 5, 30, PARRY_RADIUS, function(v)
     PARRY_RADIUS = v
+end)
+
+createSectionLabel(movementPage, "СКОРОСТЬ")
+createToggle(movementPage, "Ускорение", function(v) SPEED_ENABLED = v end)
+createDropdownSlider(movementPage, "WalkSpeed", 16, 100, 32, function(v)
+    SPEED_VALUE = v
+end)
+
+createSectionLabel(movementPage, "ПРЫЖОК")
+createToggle(movementPage, "Увеличенный прыжок", function(v) JUMP_ENABLED = v end)
+createDropdownSlider(movementPage, "JumpPower", 50, 200, 80, function(v)
+    JUMP_VALUE = v
+end)
+createToggle(movementPage, "Бесконечный прыжок", function(v) INFINITE_JUMP = v end)
+
+createSectionLabel(movementPage, "NOCLIP")
+createToggle(movementPage, "Noclip", function(v) NOCLIP_ENABLED = v end)
+
+createSectionLabel(movementPage, "FLY")
+createToggle(movementPage, "Fly", function(v) FLY_ENABLED = v end)
+createDropdownSlider(movementPage, "Скорость полёта", 20, 200, 50, function(v)
+    FLY_SPEED = v
 end)
 
 closeBtn.MouseButton1Click:Connect(function()
@@ -775,6 +954,8 @@ closeBtn.MouseButton1Click:Connect(function()
     clearKillerESP()
     clearPalletESP()
     clearGeneratorESP()
+    if flyBodyVelocity then flyBodyVelocity:Destroy() end
+    if flyBodyGyro then flyBodyGyro:Destroy() end
     Workspace.CurrentCamera.FieldOfView = 70
     screenGui:Destroy()
     print("[Brutal Script] unloaded")
