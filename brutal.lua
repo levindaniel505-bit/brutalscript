@@ -438,7 +438,7 @@ Enabled = false,
 ShowButton = false,
 SpamSpeed = 30,
 Intensity = 35,
-SlowSpeed = 13,
+SlowSpeed = 20,
 UseSlow = true
 }
 
@@ -2762,7 +2762,7 @@ RunService.Heartbeat:Connect(function()
             end
         end
 
-        if Movement.WalkSpeedEnabled then
+        if Movement.WalkSpeedEnabled and not Moonwalk.Enabled then
             local char = LocalPlayer.Character
             local hum = char and char:FindFirstChildOfClass("Humanoid")
             if hum then
