@@ -127,16 +127,6 @@ loadPercent.Font = Enum.Font.GothamBold
 loadPercent.TextSize = 14
 loadPercent.Parent = loadFrame
 
-task.spawn(function()
-    for i = 0, 100 do
-        loadBarFill:TweenSize(UDim2.new(i / 100, 0, 1, 0), Enum.EasingDirection.Out, Enum.EasingStyle.Quad, 0.02, true)
-        loadPercent.Text = i .. "%"
-        task.wait(0.02)
-    end
-    task.wait(0.3)
-    loadingGui:Destroy()
-end)
-
 local function getKeyName(key)
     if not key then return "None" end
     return key.Name
@@ -176,6 +166,7 @@ local screenGui = Instance.new("ScreenGui")
 screenGui.Name = "BrutalScriptMenu"
 screenGui.ResetOnSpawn = false
 screenGui.Parent = game.CoreGui
+screenGui.Enabled = false
 
 local mainFrame = Instance.new("Frame")
 mainFrame.Size = UDim2.new(0, 380, 0, 560)
@@ -924,8 +915,7 @@ track(RunService.Stepped:Connect(function(_, dt)
     if MOONWALK_ENABLED then
         local now = tick()
         local wDown = UserInputService:IsKeyDown(Enum.KeyCode.W)
-        local sDown = UserInputService:IsKeyDown(Enum.KeyCode.S)
-        if wDown or sDown then
+        if wDown then
             if now - moonwalkLastSide >= MOONWALK_SWITCH_TIME then
                 moonwalkLastSide = now
                 moonwalkSide = (moonwalkSide == "A") and "D" or "A"
@@ -1099,5 +1089,16 @@ loadBinds()
 for id, _ in pairs(BINDS) do
     updateBindLabel(id, false)
 end
+
+task.spawn(function()
+    for i = 0, 100 do
+        loadBarFill:TweenSize(UDim2.new(i / 100, 0, 1, 0), Enum.EasingDirection.Out, Enum.EasingStyle.Quad, 0.02, true)
+        loadPercent.Text = i .. "%"
+        task.wait(0.02)
+    end
+    task.wait(0.3)
+    loadingGui:Destroy()
+    screenGui.Enabled = true
+end)
 
 print("[BRUTAL SCRIPT] Loaded successfully.")
