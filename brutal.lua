@@ -23,11 +23,7 @@ local NOCLIP_ENABLED = false
 local FLY_ENABLED = false
 local FLY_SPEED = 50
 local MOONWALK_ENABLED = false
-local MOONWALK_INTERVAL = 0.05
-local MOONWALK_SWITCH_TIME = 1
-local moonwalkLastSwitch = 0
-local moonwalkLastSide = 0
-local moonwalkSide = "A"
+local MOONWALK_SPEED = 32
 
 local FOV_ENABLED = false
 local FOV_VALUE = 70
@@ -49,6 +45,9 @@ local connections = {}
 local loops = {}
 local bindingMode = nil
 local menuMinimized = false
+local flyVelocity = nil
+local moonwalkVel = nil
+local moonwalkAlign = nil
 
 local BIND_FILE = "brutal_binds.json"
 
@@ -842,8 +841,6 @@ table.insert(loops, task.spawn(function()
     end
 end))
 
-local flyVelocity = nil
-
 track(RunService.Stepped:Connect(function(_, dt)
     local char = LocalPlayer.Character
     local hum = char and char:FindFirstChildOfClass("Humanoid")
@@ -912,21 +909,41 @@ track(RunService.Stepped:Connect(function(_, dt)
         end
     end
 
-    if MOONWALK_ENABLED then
-        local now = tick()
-        local wDown = UserInputService:IsKeyDown(Enum.KeyCode.W)
-        if wDown then
-            if now - moonwalkLastSide >= MOONWALK_SWITCH_TIME then
-                moonwalkLastSide = now
-                moonwalkSide = (moonwalkSide == "A") and "D" or "A"
+    if MOONWALK_ENABLED and hum and root then
+        local moveDir = hum.MoveDirection
+        if moveDir.Magnitude > 0 then
+            hum.AutoRotate = false
+            local moveVec = Vector3.new(moveDir.X, 0, moveDir.Z).Unit
+
+            if not moonwalkVel or not moonwalkVel.Parent then
+                moonwalkVel = Instance.new("BodyVelocity")
+                moonwalkVel.MaxForce = Vector3.new(1e5, 0, 1e5)
+                moonwalkVel.P = 1e4
+                moonwalkVel.Parent = root
             end
-            if now - moonwalkLastSwitch >= MOONWALK_INTERVAL then
-                moonwalkLastSwitch = now
-                VirtualInputManager:SendKeyEvent(true, Enum.KeyCode[moonwalkSide], false, game)
-                task.wait(0.01)
-                VirtualInputManager:SendKeyEvent(false, Enum.KeyCode[moonwalkSide], false, game)
+            moonwalkVel.Velocity = moveVec * MOONWALK_SPEED
+
+            if not moonwalkAlign or not moonwalkAlign.Parent then
+                moonwalkAlign = Instance.new("AlignOrientation")
+                moonwalkAlign.Mode = Enum.OrientationAlignmentMode.OneAttachment
+                moonwalkAlign.MaxTorque = 1e5
+                moonwalkAlign.Responsiveness = 100
+                moonwalkAlign.Parent = root
+                local att = Instance.new("Attachment")
+                att.Parent = root
+                moonwalkAlign.Attachment0 = att
             end
+            local lookDir = -moveVec
+            moonwalkAlign.CFrame = CFrame.lookAt(root.Position, root.Position + lookDir)
+        else
+            hum.AutoRotate = true
+            if moonwalkVel then moonwalkVel:Destroy() moonwalkVel = nil end
+            if moonwalkAlign then moonwalkAlign:Destroy() moonwalkAlign = nil end
         end
+    else
+        if hum then hum.AutoRotate = true end
+        if moonwalkVel then moonwalkVel:Destroy() moonwalkVel = nil end
+        if moonwalkAlign then moonwalkAlign:Destroy() moonwalkAlign = nil end
     end
 end))
 
@@ -1061,16 +1078,13 @@ createCollapsible(movementPage, "Fly", function(content)
     end)
 end)
 
-createCollapsible(movementPage, "Auto Moonwalk", function(content)
+createCollapsible(movementPage, "Moonwalk", function(content)
     createStateButton(content, "Moonwalk", function() return MOONWALK_ENABLED end, function(v)
         MOONWALK_ENABLED = v
         updateBindLabel("moonwalk", v)
     end)
-    createSlider(content, "Spam Interval", 1, 10, 5, function(val)
-        MOONWALK_INTERVAL = val / 100
-    end)
-    createSlider(content, "Switch Side Time", 1, 30, 10, function(val)
-        MOONWALK_SWITCH_TIME = val / 10
+    createSlider(content, "Moonwalk Speed", 16, 80, MOONWALK_SPEED, function(val)
+        MOONWALK_SPEED = val
     end)
 end)
 
