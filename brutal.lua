@@ -5,27 +5,53 @@ local UserInputService = game:GetService("UserInputService")
 local VirtualInputManager = game:GetService("VirtualInputManager")
 local LocalPlayer = Players.LocalPlayer
 
-local ESP_KILLER = false
-local ESP_PALLET = false
-local ESP_GENERATOR = false
-local ESP_DISTANCE = true
-local AUTO_PARRY = false
-local PARRY_RADIUS = 15
+local CONFIG_FILE = "brutal_config.json"
+
+local CONFIG = {
+    espKiller = false,
+    espPallet = false,
+    espGenerator = false,
+    espDistance = true,
+    autoParry = false,
+    parryRadius = 15,
+    fly = false,
+    flySpeed = 50,
+    noclip = false,
+    speed = false,
+    speedValue = 16,
+    jump = false,
+    jumpValue = 80,
+    moonwalk = false,
+    moonwalkSpeed = 16,
+    moonwalkSideInterval = 1,
+    moonwalkTurnSpeed = 6,
+    noFall = false,
+    noSlowed = false,
+    fovEnabled = false,
+    fovValue = 70,
+}
+
+local ESP_KILLER = CONFIG.espKiller
+local ESP_PALLET = CONFIG.espPallet
+local ESP_GENERATOR = CONFIG.espGenerator
+local ESP_DISTANCE = CONFIG.espDistance
+local AUTO_PARRY = CONFIG.autoParry
+local PARRY_RADIUS = CONFIG.parryRadius
 local PARRY_KEY = Enum.KeyCode.Q
 local PARRY_COOLDOWN = 0.3
 local lastParry = 0
 
-local SPEED_ENABLED = false
-local SPEED_VALUE = 16
-local JUMP_ENABLED = false
-local JUMP_VALUE = 80
-local NOCLIP_ENABLED = false
-local FLY_ENABLED = false
-local FLY_SPEED = 50
-local MOONWALK_ENABLED = false
-local MOONWALK_SPEED = 16
-local MOONWALK_SIDE_INTERVAL = 1
-local MOONWALK_TURN_SPEED = 6
+local SPEED_ENABLED = CONFIG.speed
+local SPEED_VALUE = CONFIG.speedValue
+local JUMP_ENABLED = CONFIG.jump
+local JUMP_VALUE = CONFIG.jumpValue
+local NOCLIP_ENABLED = CONFIG.noclip
+local FLY_ENABLED = CONFIG.fly
+local FLY_SPEED = CONFIG.flySpeed
+local MOONWALK_ENABLED = CONFIG.moonwalk
+local MOONWALK_SPEED = CONFIG.moonwalkSpeed
+local MOONWALK_SIDE_INTERVAL = CONFIG.moonwalkSideInterval
+local MOONWALK_TURN_SPEED = CONFIG.moonwalkTurnSpeed
 local MOONWALK_ANGLE_STEP = 30
 local moonwalkLastSide = 0
 local moonwalkSide = 1
@@ -34,11 +60,11 @@ local moonwalkCurrentAngle = 0
 local moonwalkGyro = nil
 local moonwalkVel = nil
 
-local NO_FALL_ENABLED = false
-local NO_SLOWED_ENABLED = false
+local NO_FALL_ENABLED = CONFIG.noFall
+local NO_SLOWED_ENABLED = CONFIG.noSlowed
 
-local FOV_ENABLED = false
-local FOV_VALUE = 70
+local FOV_ENABLED = CONFIG.fovEnabled
+local FOV_VALUE = CONFIG.fovValue
 
 local KILLER_COLOR = Color3.fromRGB(255, 0, 0)
 local PALLET_COLOR = Color3.fromRGB(255, 255, 255)
@@ -74,6 +100,134 @@ local BINDS = {
 }
 
 local bindLabels = {}
+
+local function saveConfig()
+    local data = {
+        espKiller = ESP_KILLER,
+        espPallet = ESP_PALLET,
+        espGenerator = ESP_GENERATOR,
+        espDistance = ESP_DISTANCE,
+        autoParry = AUTO_PARRY,
+        parryRadius = PARRY_RADIUS,
+        fly = FLY_ENABLED,
+        flySpeed = FLY_SPEED,
+        noclip = NOCLIP_ENABLED,
+        speed = SPEED_ENABLED,
+        speedValue = SPEED_VALUE,
+        jump = JUMP_ENABLED,
+        jumpValue = JUMP_VALUE,
+        moonwalk = MOONWALK_ENABLED,
+        moonwalkSpeed = MOONWALK_SPEED,
+        moonwalkSideInterval = MOONWALK_SIDE_INTERVAL,
+        moonwalkTurnSpeed = MOONWALK_TURN_SPEED,
+        noFall = NO_FALL_ENABLED,
+        noSlowed = NO_SLOWED_ENABLED,
+        fovEnabled = FOV_ENABLED,
+        fovValue = FOV_VALUE,
+    }
+    local json = game:GetService("HttpService"):JSONEncode(data)
+    if writefile then
+        pcall(function() writefile(CONFIG_FILE, json) end)
+    end
+    _G.BRUTAL_CONFIG_RAW = json
+end
+
+local function loadConfig()
+    local json
+    if _G.BRUTAL_CONFIG_RAW then
+        json = _G.BRUTAL_CONFIG_RAW
+    elseif readfile and isfile and isfile(CONFIG_FILE) then
+        local ok, content = pcall(function() return readfile(CONFIG_FILE) end)
+        if ok then json = content end
+    end
+    if not json then return end
+    local ok, data = pcall(function()
+        return game:GetService("HttpService"):JSONDecode(json)
+    end)
+    if ok and data then
+        ESP_KILLER = data.espKiller or ESP_KILLER
+        ESP_PALLET = data.espPallet or ESP_PALLET
+        ESP_GENERATOR = data.espGenerator or ESP_GENERATOR
+        ESP_DISTANCE = data.espDistance ~= nil and data.espDistance or ESP_DISTANCE
+        AUTO_PARRY = data.autoParry or AUTO_PARRY
+        PARRY_RADIUS = data.parryRadius or PARRY_RADIUS
+        FLY_ENABLED = data.fly or FLY_ENABLED
+        FLY_SPEED = data.flySpeed or FLY_SPEED
+        NOCLIP_ENABLED = data.noclip or NOCLIP_ENABLED
+        SPEED_ENABLED = data.speed or SPEED_ENABLED
+        SPEED_VALUE = data.speedValue or SPEED_VALUE
+        JUMP_ENABLED = data.jump or JUMP_ENABLED
+        JUMP_VALUE = data.jumpValue or JUMP_VALUE
+        MOONWALK_ENABLED = data.moonwalk or MOONWALK_ENABLED
+        MOONWALK_SPEED = data.moonwalkSpeed or MOONWALK_SPEED
+        MOONWALK_SIDE_INTERVAL = data.moonwalkSideInterval or MOONWALK_SIDE_INTERVAL
+        MOONWALK_TURN_SPEED = data.moonwalkTurnSpeed or MOONWALK_TURN_SPEED
+        NO_FALL_ENABLED = data.noFall or NO_FALL_ENABLED
+        NO_SLOWED_ENABLED = data.noSlowed or NO_SLOWED_ENABLED
+        FOV_ENABLED = data.fovEnabled or FOV_ENABLED
+        FOV_VALUE = data.fovValue or FOV_VALUE
+    end
+end
+
+local function resetConfig()
+    ESP_KILLER = false
+    ESP_PALLET = false
+    ESP_GENERATOR = false
+    ESP_DISTANCE = true
+    AUTO_PARRY = false
+    PARRY_RADIUS = 15
+    FLY_ENABLED = false
+    FLY_SPEED = 50
+    NOCLIP_ENABLED = false
+    SPEED_ENABLED = false
+    SPEED_VALUE = 16
+    JUMP_ENABLED = false
+    JUMP_VALUE = 80
+    MOONWALK_ENABLED = false
+    MOONWALK_SPEED = 16
+    MOONWALK_SIDE_INTERVAL = 1
+    MOONWALK_TURN_SPEED = 6
+    NO_FALL_ENABLED = false
+    NO_SLOWED_ENABLED = false
+    FOV_ENABLED = false
+    FOV_VALUE = 70
+    saveConfig()
+end
+
+local function getKeyName(key)
+    if not key then return "None" end
+    return key.Name
+end
+
+local function saveBinds()
+    if not writefile then return end
+    local data = {}
+    for k, v in pairs(BINDS) do
+        data[k] = v.Name
+    end
+    pcall(function()
+        writefile(BIND_FILE, game:GetService("HttpService"):JSONEncode(data))
+    end)
+end
+
+local function loadBinds()
+    if not (readfile and isfile) then return end
+    if not isfile(BIND_FILE) then return end
+    pcall(function()
+        local data = game:GetService("HttpService"):JSONDecode(readfile(BIND_FILE))
+        for k, v in pairs(data) do
+            if BINDS[k] then
+                local key = Enum.KeyCode[v]
+                if key then BINDS[k] = key end
+            end
+        end
+    end)
+end
+
+local function track(conn)
+    table.insert(connections, conn)
+    return conn
+end
 
 local loadingGui = Instance.new("ScreenGui")
 loadingGui.Name = "BrutalLoading"
@@ -148,41 +302,6 @@ loadPercent.Font = Enum.Font.GothamBold
 loadPercent.TextSize = 14
 loadPercent.Parent = loadFrame
 
-local function getKeyName(key)
-    if not key then return "None" end
-    return key.Name
-end
-
-local function saveBinds()
-    if not writefile then return end
-    local data = {}
-    for k, v in pairs(BINDS) do
-        data[k] = v.Name
-    end
-    pcall(function()
-        writefile(BIND_FILE, game:GetService("HttpService"):JSONEncode(data))
-    end)
-end
-
-local function loadBinds()
-    if not (readfile and isfile) then return end
-    if not isfile(BIND_FILE) then return end
-    pcall(function()
-        local data = game:GetService("HttpService"):JSONDecode(readfile(BIND_FILE))
-        for k, v in pairs(data) do
-            if BINDS[k] then
-                local key = Enum.KeyCode[v]
-                if key then BINDS[k] = key end
-            end
-        end
-    end)
-end
-
-local function track(conn)
-    table.insert(connections, conn)
-    return conn
-end
-
 local screenGui = Instance.new("ScreenGui")
 screenGui.Name = "BrutalScriptMenu"
 screenGui.ResetOnSpawn = false
@@ -191,7 +310,7 @@ screenGui.Enabled = false
 
 local mainFrame = Instance.new("Frame")
 mainFrame.Size = UDim2.new(0, 0, 0, 0)
-mainFrame.Position = UDim2.new(0, 30, 0.5, -280)
+mainFrame.Position = UDim2.new(0, 30, 0.5, -30)
 mainFrame.BackgroundColor3 = Color3.fromRGB(15, 15, 15)
 mainFrame.BorderSizePixel = 0
 mainFrame.Active = true
@@ -270,22 +389,22 @@ tabCorner.Parent = tabBar
 
 local tabLayout = Instance.new("UIListLayout")
 tabLayout.FillDirection = Enum.FillDirection.Horizontal
-tabLayout.Padding = UDim.new(0, 5)
+tabLayout.Padding = UDim.new(0, 4)
 tabLayout.VerticalAlignment = Enum.VerticalAlignment.Center
 tabLayout.HorizontalAlignment = Enum.HorizontalAlignment.Center
 tabLayout.Parent = tabBar
 
-local tabNames = {"ESP", "Visual", "Survivor", "Movement", "Binds"}
+local tabNames = {"ESP", "Visual", "Survivor", "Movement", "Config", "Binds"}
 local tabButtons = {}
 
 for i, name in ipairs(tabNames) do
     local tab = Instance.new("TextButton")
-    tab.Size = UDim2.new(0.18, 0, 0, 30)
+    tab.Size = UDim2.new(0.155, 0, 0, 30)
     tab.BackgroundColor3 = (i == 1) and Color3.fromRGB(60, 60, 60) or Color3.fromRGB(30, 30, 30)
     tab.Text = name
     tab.TextColor3 = Color3.fromRGB(255, 255, 255)
     tab.Font = Enum.Font.GothamBold
-    tab.TextSize = 11
+    tab.TextSize = 10
     tab.Parent = tabBar
     local c = Instance.new("UICorner")
     c.CornerRadius = UDim.new(0, 8)
@@ -316,6 +435,7 @@ espPage.Visible = true
 local visualPage = createPage()
 local survivorPage = createPage()
 local movementPage = createPage()
+local configPage = createPage()
 local bindsPage = createPage()
 
 local function switchTab(name)
@@ -323,6 +443,7 @@ local function switchTab(name)
     visualPage.Visible = (name == "Visual")
     survivorPage.Visible = (name == "Survivor")
     movementPage.Visible = (name == "Movement")
+    configPage.Visible = (name == "Config")
     bindsPage.Visible = (name == "Binds")
     for n, btn in pairs(tabButtons) do
         btn.BackgroundColor3 = (n == name) and Color3.fromRGB(60, 60, 60) or Color3.fromRGB(30, 30, 30)
@@ -349,34 +470,42 @@ local bindActions = {
     espKiller = function()
         ESP_KILLER = not ESP_KILLER
         updateBindLabel("espKiller", ESP_KILLER)
+        saveConfig()
     end,
     espPallet = function()
         ESP_PALLET = not ESP_PALLET
         updateBindLabel("espPallet", ESP_PALLET)
+        saveConfig()
     end,
     espGenerator = function()
         ESP_GENERATOR = not ESP_GENERATOR
         updateBindLabel("espGenerator", ESP_GENERATOR)
+        saveConfig()
     end,
     autoParry = function()
         AUTO_PARRY = not AUTO_PARRY
         updateBindLabel("autoParry", AUTO_PARRY)
+        saveConfig()
     end,
     fly = function()
         FLY_ENABLED = not FLY_ENABLED
         updateBindLabel("fly", FLY_ENABLED)
+        saveConfig()
     end,
     noclip = function()
         NOCLIP_ENABLED = not NOCLIP_ENABLED
         updateBindLabel("noclip", NOCLIP_ENABLED)
+        saveConfig()
     end,
     speed = function()
         SPEED_ENABLED = not SPEED_ENABLED
         updateBindLabel("speed", SPEED_ENABLED)
+        saveConfig()
     end,
     moonwalk = function()
         MOONWALK_ENABLED = not MOONWALK_ENABLED
         updateBindLabel("moonwalk", MOONWALK_ENABLED)
+        saveConfig()
     end,
 }
 
@@ -602,6 +731,28 @@ local function createBindButton(parent, id, text)
         btn.Text = text .. ": НАЖМИ КЛАВИШУ..."
         btn.BackgroundColor3 = Color3.fromRGB(80, 60, 20)
     end)
+end
+
+local function createActionButton(parent, text, color, callback)
+    local btn = Instance.new("TextButton")
+    btn.Size = UDim2.new(0.9, 0, 0, 40)
+    btn.Position = UDim2.new(0.05, 0, 0, 0)
+    btn.BackgroundColor3 = color
+    btn.Text = text
+    btn.TextColor3 = Color3.fromRGB(255, 255, 255)
+    btn.Font = Enum.Font.GothamBold
+    btn.TextSize = 13
+    btn.Parent = parent
+    local c = Instance.new("UICorner")
+    c.CornerRadius = UDim.new(0, 8)
+    c.Parent = btn
+    local s = Instance.new("UIStroke")
+    s.Color = Color3.fromRGB(120, 120, 120)
+    s.Thickness = 1
+    s.Parent = btn
+
+    btn.MouseButton1Click:Connect(callback)
+    return btn
 end
 
 local function createHighlight(adornee, color)
@@ -908,8 +1059,10 @@ track(RunService.Stepped:Connect(function(_, dt)
 
         if JUMP_ENABLED then
             hum.JumpPower = JUMP_VALUE
+            hum.UseJumpPower = true
         else
-            hum.JumpPower = 50
+            hum.JumpPower = 0
+            hum.UseJumpPower = true
         end
     end
 
@@ -1040,7 +1193,7 @@ end))
 minimizeBtn.MouseButton1Click:Connect(function()
     menuMinimized = not menuMinimized
     if menuMinimized then
-        for _, page in ipairs({espPage, visualPage, survivorPage, movementPage, bindsPage}) do
+        for _, page in ipairs({espPage, visualPage, survivorPage, movementPage, configPage, bindsPage}) do
             page.Visible = false
         end
         tabBar.Visible = false
@@ -1071,9 +1224,11 @@ createCollapsible(espPage, "ESP Killers", function(content)
     createStateButton(content, "Killer ESP", function() return ESP_KILLER end, function(v)
         ESP_KILLER = v
         updateBindLabel("espKiller", v)
+        saveConfig()
     end)
     createStateButton(content, "Show Distance", function() return ESP_DISTANCE end, function(v)
         ESP_DISTANCE = v
+        saveConfig()
     end)
 end)
 
@@ -1081,6 +1236,7 @@ createCollapsible(espPage, "ESP Pallets", function(content)
     createStateButton(content, "Pallet ESP", function() return ESP_PALLET end, function(v)
         ESP_PALLET = v
         updateBindLabel("espPallet", v)
+        saveConfig()
     end)
 end)
 
@@ -1088,15 +1244,18 @@ createCollapsible(espPage, "ESP Generators", function(content)
     createStateButton(content, "Generator ESP", function() return ESP_GENERATOR end, function(v)
         ESP_GENERATOR = v
         updateBindLabel("espGenerator", v)
+        saveConfig()
     end)
 end)
 
 createCollapsible(visualPage, "FOV Changer", function(content)
     createStateButton(content, "FOV Lock", function() return FOV_ENABLED end, function(v)
         FOV_ENABLED = v
+        saveConfig()
     end)
     createSlider(content, "FOV Value", 30, 120, FOV_VALUE, function(val)
         FOV_VALUE = val
+        saveConfig()
     end)
 end)
 
@@ -1104,21 +1263,25 @@ createCollapsible(survivorPage, "Auto Parry", function(content)
     createStateButton(content, "Auto Parry", function() return AUTO_PARRY end, function(v)
         AUTO_PARRY = v
         updateBindLabel("autoParry", v)
+        saveConfig()
     end)
     createSlider(content, "Parry Radius", 5, 30, PARRY_RADIUS, function(val)
         PARRY_RADIUS = val
+        saveConfig()
     end)
 end)
 
 createCollapsible(survivorPage, "No Fall", function(content)
     createStateButton(content, "No Fall", function() return NO_FALL_ENABLED end, function(v)
         NO_FALL_ENABLED = v
+        saveConfig()
     end)
 end)
 
 createCollapsible(survivorPage, "No Slowed", function(content)
     createStateButton(content, "No Slowed", function() return NO_SLOWED_ENABLED end, function(v)
         NO_SLOWED_ENABLED = v
+        saveConfig()
     end)
 end)
 
@@ -1126,18 +1289,22 @@ createCollapsible(movementPage, "Speed", function(content)
     createStateButton(content, "Speed", function() return SPEED_ENABLED end, function(v)
         SPEED_ENABLED = v
         updateBindLabel("speed", v)
+        saveConfig()
     end)
     createSlider(content, "Speed Value", 16, 200, SPEED_VALUE, function(val)
         SPEED_VALUE = val
+        saveConfig()
     end)
 end)
 
 createCollapsible(movementPage, "Jump", function(content)
     createStateButton(content, "Jump", function() return JUMP_ENABLED end, function(v)
         JUMP_ENABLED = v
+        saveConfig()
     end)
     createSlider(content, "Jump Value", 50, 300, JUMP_VALUE, function(val)
         JUMP_VALUE = val
+        saveConfig()
     end)
 end)
 
@@ -1145,6 +1312,7 @@ createCollapsible(movementPage, "Noclip", function(content)
     createStateButton(content, "Noclip", function() return NOCLIP_ENABLED end, function(v)
         NOCLIP_ENABLED = v
         updateBindLabel("noclip", v)
+        saveConfig()
     end)
 end)
 
@@ -1152,9 +1320,11 @@ createCollapsible(movementPage, "Fly", function(content)
     createStateButton(content, "Fly", function() return FLY_ENABLED end, function(v)
         FLY_ENABLED = v
         updateBindLabel("fly", v)
+        saveConfig()
     end)
     createSlider(content, "Fly Speed", 10, 200, FLY_SPEED, function(val)
         FLY_SPEED = val
+        saveConfig()
     end)
 end)
 
@@ -1162,17 +1332,37 @@ createCollapsible(movementPage, "Moonwalk", function(content)
     createStateButton(content, "Moonwalk", function() return MOONWALK_ENABLED end, function(v)
         MOONWALK_ENABLED = v
         updateBindLabel("moonwalk", v)
+        saveConfig()
     end)
     createSlider(content, "Moonwalk Speed", 16, 80, MOONWALK_SPEED, function(val)
         MOONWALK_SPEED = val
+        saveConfig()
     end)
     createSlider(content, "Side Interval (x0.1s)", 1, 30, 10, function(val)
         MOONWALK_SIDE_INTERVAL = val / 10
+        saveConfig()
     end)
     createSlider(content, "Turn Speed", 1, 20, MOONWALK_TURN_SPEED, function(val)
         MOONWALK_TURN_SPEED = val
+        saveConfig()
     end)
 end)
+
+createSectionLabel(configPage, "Configuration")
+createActionButton(configPage, "Save Config", Color3.fromRGB(30, 130, 30), function()
+    saveConfig()
+end)
+createActionButton(configPage, "Load Config", Color3.fromRGB(30, 80, 150), function()
+    loadConfig()
+    saveConfig()
+    closeBtn.MouseButton1Click:Fire()
+end)
+createActionButton(configPage, "Reset Config", Color3.fromRGB(150, 40, 40), function()
+    resetConfig()
+    saveConfig()
+end)
+createSectionLabel(configPage, "Config saves to file on your executor")
+createSectionLabel(configPage, "brutal_config.json")
 
 createSectionLabel(bindsPage, "Keybinds (click to rebind)")
 createBindButton(bindsPage, "toggleMenu", "Toggle Menu")
@@ -1186,6 +1376,8 @@ createBindButton(bindsPage, "speed", "Speed")
 createBindButton(bindsPage, "moonwalk", "Moonwalk")
 
 loadBinds()
+loadConfig()
+saveConfig()
 for id, _ in pairs(BINDS) do
     updateBindLabel(id, false)
 end
