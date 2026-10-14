@@ -520,16 +520,14 @@ local Moonwalk = { Enabled = false, ShowButton = false, SpamSpeed = 30, Intensit
 local MoonwalkConnection = nil
 local MoonwalkButton = nil
 
--- ============== ORBIT 360 CONFIG ==============
+-- ============== ORBIT CAMERA (with WASD) CONFIG ==============
 local Orbit = {
     Enabled = false,
     Radius = 25,
-    OrbitTime = 0.5,
-    Cooldown = 2,
-    SpeedBoost = 0,
-    LastTrigger = 0,
-    Active = false,
+    Speed = 1.5,
+    Height = 3,
     Target = nil,
+    Angle = 0,
 }
 
 local CameraZoom = { UnlimitedZoom = false, MaxDistance = 1000, MinDistance = 0, FOVEnabled = false, FOV = 70, DefaultFOV = workspace.CurrentCamera.FieldOfView }
@@ -564,95 +562,71 @@ local function getHum()
     return c and c:FindFirstChildOfClass("Humanoid")
 end
 
--- ============== ORBIT 360 FUNCTION ==============
--- Облёт вокруг цели по дуге окружности 360°. Персонаж физически двигается.
-local function performOrbit(targetRoot)
-    local myRoot = getRoot()
-    if not myRoot or not targetRoot or not targetRoot.Parent then return end
-
-    local centerPos = targetRoot.Position
-    local startPos = myRoot.Position
-    local startY = startPos.Y
-
-    -- Радиус орбиты = расстояние от нас до цели по горизонтали
-    local toMe = Vector3.new(startPos.X - centerPos.X, 0, startPos.Z - centerPos.Z)
-    local orbitRadius = toMe.Magnitude
-    if orbitRadius < 2 then orbitRadius = 3 end
-
-    -- Стартовый угол (где мы находимся относительно цели)
-    local startAngle = math.atan2(toMe.Z, toMe.X)
-    local totalAngle = math.pi * 2  -- 360 градусов
-    local duration = Orbit.OrbitTime
-    local startTick = tick()
-
-    Orbit.Active = true
-
-    while tick() - startTick < duration do
-        -- Если цель исчезла/умерла — прерываем
-        if not targetRoot.Parent then break end
-        local hum = targetRoot.Parent:FindFirstChildOfClass("Humanoid")
-        if not hum or hum.Health <= 0 then break end
-
-        local progress = (tick() - startTick) / duration
-        local currentAngle = startAngle + totalAngle * progress
-
-        local x = centerPos.X + math.cos(currentAngle) * orbitRadius
-        local z = centerPos.Z + math.sin(currentAngle) * orbitRadius
-
-        local targetPos = Vector3.new(x, startY, z)
-
-        -- Жёсткая установка позиции — анимации движения сами подстроятся
-        myRoot.CFrame = CFrame.new(targetPos, targetPos + (targetPos - centerPos).Unit)
-
-        RunService.RenderStepped:Wait()
-    end
-
-    -- Возврат на исходную позицию
-    local currentRoot = getRoot()
-    if currentRoot then
-        currentRoot.CFrame = CFrame.new(startPos)
-    end
-
-    Orbit.Active = false
-    Orbit.Target = nil
-end
-
--- ============== ORBIT 360 TRIGGER ==============
+-- ============== ORBIT CAMERA (with WASD) LOGIC ==============
+-- Камера вращается вокруг цели. Игрок жмёт W — персонаж идёт по камере.
+-- Визуально: оббегаешь Киллера по кругу, потому что W = вперёд по камере.
 task.spawn(function()
-    while task.wait(0.05) do
-        if not Orbit.Enabled then continue end
-        if Orbit.Active then continue end
-
-        local now = tick()
-        if now - Orbit.LastTrigger < Orbit.Cooldown then continue end
+    while task.wait(0.03) do
+        if not Orbit.Enabled then
+            Orbit.Target = nil
+            continue
+        end
 
         local myRoot = getRoot()
-        if not myRoot then continue end
+        local cam = workspace.CurrentCamera
+        if not myRoot or not cam then continue end
 
-        -- Ищем ближайшую цель в радиусе
-        local targetRoot = nil
-        local shortest = Orbit.Radius
+        -- Если цель уже есть — проверяем валидность
+        if Orbit.Target then
+            local tr = Orbit.Target
+            if not tr.Parent then
+                Orbit.Target = nil
+            else
+                local hum = tr.Parent:FindFirstChildOfClass("Humanoid")
+                local dist = (tr.Position - myRoot.Position).Magnitude
+                if not hum or hum.Health <= 0 or dist > Orbit.Radius * 1.5 then
+                    Orbit.Target = nil
+                end
+            end
+        end
 
-        for _, plr in ipairs(Players:GetPlayers()) do
-            if plr ~= LocalPlayer and plr.Character then
-                local hrp = plr.Character:FindFirstChild("HumanoidRootPart")
-                local hum = plr.Character:FindFirstChildOfClass("Humanoid")
-                if hrp and hum and hum.Health > 0 then
-                    local dist = (hrp.Position - myRoot.Position).Magnitude
-                    if dist < shortest and dist > 2 then
-                        shortest = dist
-                        targetRoot = hrp
+        -- Ищем новую цель
+        if not Orbit.Target then
+            local shortest = Orbit.Radius
+            for _, plr in ipairs(Players:GetPlayers()) do
+                if plr ~= LocalPlayer and plr.Character then
+                    local hrp = plr.Character:FindFirstChild("HumanoidRootPart")
+                    local hum = plr.Character:FindFirstChildOfClass("Humanoid")
+                    if hrp and hum and hum.Health > 0 then
+                        local dist = (hrp.Position - myRoot.Position).Magnitude
+                        if dist < shortest then
+                            shortest = dist
+                            Orbit.Target = hrp
+                        end
                     end
                 end
             end
         end
 
-        if targetRoot then
-            Orbit.LastTrigger = now
-            Orbit.Target = targetRoot
-            task.spawn(function()
-                performOrbit(targetRoot)
-            end)
+        -- Крутим камеру вокруг цели
+        if Orbit.Target then
+            local center = Orbit.Target.Position
+            local toMe = myRoot.Position - center
+            local flat = Vector3.new(toMe.X, 0, toMe.Z)
+            local r = flat.Magnitude
+            if r < 3 then r = 3 end
+
+            -- Увеличиваем угол каждый кадр
+            Orbit.Angle = Orbit.Angle + Orbit.Speed * 0.03
+
+            local camPos = center + Vector3.new(
+                math.cos(Orbit.Angle) * r,
+                Orbit.Height,
+                math.sin(Orbit.Angle) * r
+            )
+
+            local lookAt = center + Vector3.new(0, 1, 0)
+            cam.CFrame = CFrame.new(camPos, lookAt)
         end
     end
 end)
@@ -735,7 +709,6 @@ local function applyWalkSpeed()
     if WalkSpeedConnection then WalkSpeedConnection:Disconnect() WalkSpeedConnection = nil end
     WalkSpeedConnection = RunService.Heartbeat:Connect(function()
         if not Movement.WalkSpeedEnabled then return end
-        if Orbit.Active then return end
         local hum = getHum()
         if not hum then return end
         if shouldDisableWalkSpeed() then return end
@@ -1891,7 +1864,7 @@ RunService.Heartbeat:Connect(function()
                 end
             end
         end
-        if Movement.WalkSpeedEnabled and not Moonwalk.Enabled and not Orbit.Active then
+        if Movement.WalkSpeedEnabled and not Moonwalk.Enabled then
             local hum = getHum()
             if hum then
                 if shouldDisableWalkSpeed() then
@@ -2276,33 +2249,43 @@ AbilityTab:AddButton({
 AbilityTab:AddDivider()
 
 AbilityTab:AddCheckbox("OrbitEnable", {
-    Text = "Orbit 360 (around target)",
+    Text = "Orbit Camera (W to move)",
     Default = false,
-    Callback = function(v) Orbit.Enabled = v end
+    Callback = function(v)
+        Orbit.Enabled = v
+        if v then
+            local myRoot = getRoot()
+            if myRoot then
+                local cam = workspace.CurrentCamera
+                Orbit.Angle = math.atan2(myRoot.Position.Z - 0, myRoot.Position.X - 0)
+                Orbit.Target = nil
+            end
+        end
+    end
 })
 AbilityTab:AddSlider("OrbitRadius", {
-    Text = "Trigger Radius",
+    Text = "Orbit Radius",
     Default = 25,
     Min = 5,
     Max = 60,
     Rounding = 0,
     Callback = function(v) Orbit.Radius = v end
 })
-AbilityTab:AddSlider("OrbitTime", {
-    Text = "Orbit Duration (s)",
-    Default = 0.5,
-    Min = 0.2,
-    Max = 2,
-    Rounding = 2,
-    Callback = function(v) Orbit.OrbitTime = v end
+AbilityTab:AddSlider("OrbitSpeed", {
+    Text = "Orbit Speed",
+    Default = 1.5,
+    Min = 0.3,
+    Max = 5,
+    Rounding = 1,
+    Callback = function(v) Orbit.Speed = v end
 })
-AbilityTab:AddSlider("OrbitCooldown", {
-    Text = "Cooldown",
-    Default = 2,
-    Min = 0.5,
+AbilityTab:AddSlider("OrbitHeight", {
+    Text = "Camera Height",
+    Default = 3,
+    Min = 0,
     Max = 10,
     Rounding = 1,
-    Callback = function(v) Orbit.Cooldown = v end
+    Callback = function(v) Orbit.Height = v end
 })
 
 KillerTab:AddCheckbox("AutoStalk", {
@@ -2648,6 +2631,7 @@ SettingBox:AddButton("Unload script", function() Library:Unload() end)
 
 ThemeManager:SetLibrary(Library)
 SaveManager:SetLibrary(Library)
+SaveManager:IgnoreThemeSettings()
 SaveManager:IgnoreThemeSettings()
 SaveManager:SetIgnoreIndexes({})
 ThemeManager:SetFolder("BRUTALSCRIPT")
