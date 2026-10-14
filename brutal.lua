@@ -277,11 +277,90 @@ local Window = Library:CreateWindow({
     ShowCustomCursor = true,
     ShowMobileButtons = false,
     ToggleKeybind = Enum.KeyCode.RightShift,
-    Size = UDim2.fromOffset(400, 300),
+    Size = UDim2.fromOffset(600, 400),
     EnableSidebarResize = false,
-    EnableCompacting = true,
-    SidebarCompacted = true,
+    EnableCompacting = false,
+    SidebarCompacted = false,
 })
+
+-- ============== TOP TABS PATCH ==============
+task.spawn(function()
+    task.wait(1.5)
+
+    local CoreGui = game:GetService("CoreGui")
+
+    local obsidian
+    for _, gui in ipairs(CoreGui:GetChildren()) do
+        if gui:IsA("ScreenGui") and gui.Name == "Obsidian" then
+            obsidian = gui
+            break
+        end
+    end
+
+    if not obsidian then return end
+
+    local mainFrame
+    for _, obj in ipairs(obsidian:GetDescendants()) do
+        if obj:IsA("Frame") and obj.Name == "Main" then
+            mainFrame = obj
+            break
+        end
+    end
+
+    if not mainFrame then return end
+
+    local sidebar
+    for _, obj in ipairs(mainFrame:GetDescendants()) do
+        if obj:IsA("Frame") and obj.Name == "Sidebar" then
+            sidebar = obj
+            break
+        end
+    end
+
+    if not sidebar then return end
+
+    local tabHolder
+    for _, obj in ipairs(sidebar:GetDescendants()) do
+        if obj:IsA("Frame") and obj.Name == "Tabs" then
+            tabHolder = obj
+            break
+        end
+    end
+
+    if not tabHolder then
+        tabHolder = sidebar
+    end
+
+    sidebar.Size = UDim2.new(1, 0, 0, 44)
+    sidebar.Position = UDim2.new(0, 0, 0, 0)
+    sidebar.BackgroundColor3 = Color3.fromRGB(20, 20, 20)
+
+    tabHolder.Size = UDim2.new(1, 0, 1, 0)
+    tabHolder.Position = UDim2.new(0, 0, 0, 0)
+    tabHolder.BackgroundTransparency = 1
+
+    local layout = tabHolder:FindFirstChildOfClass("UIListLayout")
+    if layout then
+        layout.FillDirection = Enum.FillDirection.Horizontal
+        layout.SortOrder = Enum.SortOrder.LayoutOrder
+        layout.Padding = UDim.new(0, 6)
+        layout.HorizontalAlignment = Enum.HorizontalAlignment.Center
+        layout.VerticalAlignment = Enum.VerticalAlignment.Center
+    end
+
+    for _, child in ipairs(tabHolder:GetChildren()) do
+        if child:IsA("TextButton") or child:IsA("ImageButton") then
+            child.Size = UDim2.new(0, 100, 1, 0)
+        end
+    end
+
+    for _, obj in ipairs(mainFrame:GetDescendants()) do
+        if obj:IsA("Frame") and obj.Name == "Content" then
+            obj.Position = UDim2.new(0, 0, 0, 50)
+            obj.Size = UDim2.new(1, 0, 1, -50)
+        end
+    end
+end)
 
 local Stats = game:GetService("Stats")
 local Players = game:GetService("Players")
@@ -289,13 +368,13 @@ local RunService = game:GetService("RunService")
 
 local Watermark = Library:AddDraggableLabel("BRUTALSCRIPT")
 
--- ============== WATERMARK ROUNDING + MENU STYLING ==============
+-- ============== WATERMARK ROUNDING ==============
 task.spawn(function()
     task.wait(1.5)
 
     local CoreGui = game:GetService("CoreGui")
 
-    local function findWatermark()
+    local function findWatermarkLabel()
         for _, gui in ipairs(CoreGui:GetChildren()) do
             if gui:IsA("ScreenGui") and gui.Name == "Obsidian" then
                 for _, obj in ipairs(gui:GetDescendants()) do
@@ -309,33 +388,44 @@ task.spawn(function()
     end
 
     local label
-    for i = 1, 20 do
-        label = findWatermark()
+    for i = 1, 25 do
+        label = findWatermarkLabel()
         if label then break end
         task.wait(0.3)
     end
 
-    if label then
-        local parent = label.Parent
-        if parent then
-            for _, old in ipairs(parent:GetChildren()) do
-                if old:IsA("UICorner") then old:Destroy() end
-            end
-            local corner = Instance.new("UICorner")
-            corner.CornerRadius = UDim.new(0, 10)
-            corner.Parent = parent
+    if not label then return end
 
-            if not parent:FindFirstChildOfClass("UIStroke") then
-                local stroke = Instance.new("UIStroke")
-                stroke.Color = Color3.fromRGB(180, 80, 255)
-                stroke.Thickness = 1
-                stroke.ApplyStrokeMode = Enum.ApplyStrokeMode.Border
-                stroke.Parent = parent
+    local node = label
+    for level = 1, 4 do
+        node = node.Parent
+        if not node or node == CoreGui then break end
+
+        for _, child in ipairs(node:GetChildren()) do
+            if child:IsA("UIStroke") then
+                child:Destroy()
+            elseif child:IsA("UICorner") then
+                child:Destroy()
             end
+        end
+
+        local corner = Instance.new("UICorner")
+        corner.CornerRadius = UDim.new(0, 12)
+        corner.Parent = node
+
+        local stroke = Instance.new("UIStroke")
+        stroke.Color = Color3.fromRGB(180, 80, 255)
+        stroke.Thickness = 1.5
+        stroke.ApplyStrokeMode = Enum.ApplyStrokeMode.Border
+        stroke.Parent = node
+
+        if node:IsA("Frame") then
+            break
         end
     end
 end)
 
+-- ============== MAIN MENU STYLING ==============
 task.spawn(function()
     task.wait(1.5)
 
@@ -375,6 +465,7 @@ task.spawn(function()
     end
 end)
 
+-- ============== WINDOW ICON ==============
 task.spawn(function()
     task.wait(2)
 
