@@ -12,7 +12,7 @@ Library.Scheme.FontColor       = Color3.fromRGB(240, 240, 240)
 local LOGO_ID = "rbxassetid://83643298666145"
 local IS_MOBILE = game:GetService("UserInputService").TouchEnabled
 
--- ================= LOADING + KEY SYSTEM =================
+-- ================= KEY SYSTEM =================
 
 local VALID_KEYS = {
     ["BRUTAL-K7X9M2QF"] = true,
@@ -47,7 +47,73 @@ local VALID_KEYS = {
     ["BRUTAL-W2S5P1KH"] = true,
 }
 
+local MAX_ACCOUNTS = 1
+local SAVE_FILE = "brutal_keys.txt"
+
 local KeyVerified = false
+
+local function loadData()
+    local data = {}
+    if not isfile or not readfile then return data end
+    if not isfile(SAVE_FILE) then return data end
+
+    local ok, raw = pcall(readfile, SAVE_FILE)
+    if not ok or not raw then return data end
+
+    for line in string.gmatch(raw, "[^\r\n]+") do
+        local key, ids = string.match(line, "^(.+)=(.+)$")
+        if key and ids then
+            data[key] = {}
+            for id in string.gmatch(ids, "%d+") do
+                table.insert(data[key], tonumber(id))
+            end
+        end
+    end
+
+    return data
+end
+
+local function saveData(data)
+    if not writefile then return end
+    local lines = {}
+    for key, ids in pairs(data) do
+        local strIds = {}
+        for _, id in ipairs(ids) do
+            table.insert(strIds, tostring(id))
+        end
+        lines[#lines + 1] = key .. "=" .. table.concat(strIds, ",")
+    end
+    pcall(writefile, SAVE_FILE, table.concat(lines, "\n"))
+end
+
+local function checkKeyWithBinding(key, userId)
+    if not VALID_KEYS[key] then
+        return false, "Invalid key"
+    end
+
+    local data = loadData()
+    local boundIds = data[key]
+
+    if not boundIds then
+        data[key] = { userId }
+        saveData(data)
+        return true, "Key activated!"
+    end
+
+    for _, id in ipairs(boundIds) do
+        if id == userId then
+            return true, "Welcome back!"
+        end
+    end
+
+    if #boundIds >= MAX_ACCOUNTS then
+        return false, "Key already used on another account"
+    end
+
+    table.insert(boundIds, userId)
+    saveData(data)
+    return true, "Key activated!"
+end
 
 local function ShowLoadingScreen()
     local gui = Instance.new("ScreenGui")
@@ -228,17 +294,20 @@ local function ShowKeyPrompt()
         status.TextColor3 = Color3.fromRGB(200, 200, 200)
         status.Text = "Checking..."
 
-        task.wait(0.4)
+        task.wait(0.3)
 
-        if VALID_KEYS[key] then
+        local userId = game:GetService("Players").LocalPlayer.UserId
+        local valid, message = checkKeyWithBinding(key, userId)
+
+        if valid then
             status.TextColor3 = Color3.fromRGB(100, 255, 120)
-            status.Text = "Key accepted!"
+            status.Text = message
             task.wait(0.6)
             gui:Destroy()
             KeyVerified = true
         else
             status.TextColor3 = Color3.fromRGB(255, 100, 100)
-            status.Text = "Invalid key"
+            status.Text = message
         end
     end)
 end
@@ -301,7 +370,6 @@ local Window = Library:CreateWindow({
     SidebarCompacted = IS_MOBILE,
 })
 
--- ============== MOBILE OPEN BUTTON ==============
 if IS_MOBILE then
     task.spawn(function()
         task.wait(2)
@@ -350,7 +418,6 @@ local RunService = game:GetService("RunService")
 
 local Watermark = Library:AddDraggableLabel("BRUTALSCRIPT")
 
--- ============== WATERMARK ROUNDING ==============
 task.spawn(function()
     task.wait(1.5)
 
@@ -407,7 +474,6 @@ task.spawn(function()
     end
 end)
 
--- ============== MAIN MENU STYLING ==============
 task.spawn(function()
     task.wait(1.5)
 
@@ -450,7 +516,6 @@ task.spawn(function()
     end
 end)
 
--- ============== WINDOW ICON ==============
 task.spawn(function()
     task.wait(2)
 
@@ -541,8 +606,7 @@ local AimlockBox = Tabs.Player:AddLeftGroupbox("AimBot", "crosshair")
 local ParryBox = Tabs.Player:AddLeftGroupbox("Parry", "swords")
 local CrosshairBox = Tabs.Player:AddLeftGroupbox("Crosshair", "crosshair")
 local MovementBox = Tabs.Misc:AddLeftGroupbox("Movement", "move")
-local EmoteBox =
-    Tabs.Misc:AddRightGroupbox("Emote", "music")
+local EmoteBox = Tabs.Misc:AddRightGroupbox("Emote", "music")
 local FunBox = Tabs.Misc:AddRightGroupbox("fun", "smile")
 local VisualBox = Tabs.Visual:AddLeftGroupbox("Graphics", "sun")
 local TimeBox = Tabs.Visual:AddRightGroupbox("Clock & Ambient", "alarm-clock-check")
@@ -564,10 +628,6 @@ local Camera = workspace.CurrentCamera
 local CarryEvent = ReplicatedStorage:WaitForChild("Remotes"):WaitForChild("Carry"):WaitForChild("CarrySurvivorEvent")
 local HookEvent  = ReplicatedStorage:WaitForChild("Remotes"):WaitForChild("Carry"):WaitForChild("HookEvent")
 local AttackEvent = ReplicatedStorage:WaitForChild("Remotes"):WaitForChild("Attacks"):WaitForChild("BasicAttack")
-local SkillCheckRemote = ReplicatedStorage
-    :WaitForChild("Remotes")
-    :WaitForChild("Generator")
-    :WaitForChild("SkillCheckResultEvent")
 
 local ESP = {
 Survivor = false,
@@ -595,8 +655,6 @@ Survivor = Color3.fromRGB(60, 255, 120)
 local Auto = {
 SkillCheck = false,
 Parry = false,
-ParryDelay = 0,
-ParryCooldown = 1,
 ParryDistance = 15,
 FaceSensitivity = 0.7,
 RequireFacing = true,
@@ -671,7 +729,6 @@ local CameraZoom = {
     UnlimitedZoom = false,
     MaxDistance = 1000,
     MinDistance = 0,
-
     FOVEnabled = false,
     FOV = 70,
     DefaultFOV = workspace.CurrentCamera.FieldOfView
@@ -731,24 +788,8 @@ local Movement = {
     NoClip = false
 }
 
-local function GetNil(Name, DebugId)
-    if not getnilinstances then return nil end
-
-    for _, Object in pairs(getnilinstances()) do
-        if Object.Name == Name then
-            if not DebugId or Object:GetDebugId() == DebugId then
-                return Object
-            end
-        end
-    end
-end
-
 local function getRoot()
-return LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("HumanoidRootPart")
-end
-
-local function getAnimId(id)
-return tostring(id):match("%d+")
+    return LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("HumanoidRootPart")
 end
 
 local function GetDowned()
@@ -800,10 +841,8 @@ end
 
 local function applyJumpPower()
     if not Movement.JumpPowerEnabled then return end
-
     local char = LocalPlayer.Character
     if not char then return end
-
     local hum = char:FindFirstChildOfClass("Humanoid")
     if hum then
         hum.JumpPower = Movement.JumpPowerValue
@@ -811,7 +850,6 @@ local function applyJumpPower()
 end
 
 local function shouldDisableWalkSpeed()
-
     local char = LocalPlayer.Character
     if not char then
         return false
@@ -853,12 +891,10 @@ if hum then
 
                 if id then
                     local fullId = "rbxassetid://" .. id
-
                     if KillerAnims[fullId] then
                         return true
                     end
                 end
-
             end
         end
     end
@@ -880,7 +916,6 @@ end
 local WalkSpeedConnection = nil
 
 local function applyWalkSpeed()
-
     if WalkSpeedConnection then
         WalkSpeedConnection:Disconnect()
         WalkSpeedConnection = nil
@@ -898,9 +933,7 @@ local function applyWalkSpeed()
                 return
             end
 
-            local hum =
-                char:FindFirstChildOfClass("Humanoid")
-
+            local hum = char:FindFirstChildOfClass("Humanoid")
             if not hum then
                 return
             end
@@ -912,7 +945,6 @@ local function applyWalkSpeed()
             if hum.WalkSpeed ~= Movement.WalkSpeedValue then
                 hum.WalkSpeed = Movement.WalkSpeedValue
             end
-
         end)
 end
 
@@ -995,7 +1027,6 @@ local function applyGodMode()
     if state == Enum.HumanoidStateType.Dead
     or state == Enum.HumanoidStateType.FallingDown
     or state == Enum.HumanoidStateType.Ragdoll then
-
         pcall(function()
             hum:ChangeState(Enum.HumanoidStateType.Running)
         end)
@@ -1003,36 +1034,26 @@ local function applyGodMode()
 end
 
 LocalPlayer.CharacterAdded:Connect(function(char)
-local hum = char:WaitForChild("Humanoid")
-task.wait(0.5)
-
-if ParryCircle then
-    ParryCircle:Destroy()
-    ParryCircle = nil
-end
+    local hum = char:WaitForChild("Humanoid")
+    task.wait(0.5)
+    if ParryCircle then
+        ParryCircle:Destroy()
+        ParryCircle = nil
+    end
 end)
-
-if LocalPlayer.Character then
-local hum = LocalPlayer.Character:FindFirstChildOfClass("Humanoid")
-if hum then
-end
-end
 
 LocalPlayer.CharacterAdded:Connect(function()
     task.wait(1)
-
     GunAim.Target = nil
     GunAim.Holding = false
     applyCameraFOV()
 end)
 
 local ESPObjects = {}
-
 local CachedSCP = {}
 
 for _, obj in ipairs(workspace:GetDescendants()) do
     local name = string.lower(obj.Name)
-
     if string.find(name, "scp") then
         CachedSCP[obj] = true
     end
@@ -1040,17 +1061,16 @@ end
 
 workspace.DescendantAdded:Connect(function(obj)
     local name = string.lower(obj.Name)
-
     if string.find(name, "scp") then
         CachedSCP[obj] = true
     end
 end)
 
 local function removeESP(obj)
-if ESPObjects[obj] then
-ESPObjects[obj]:Destroy()
-ESPObjects[obj] = nil
-end
+    if ESPObjects[obj] then
+        ESPObjects[obj]:Destroy()
+        ESPObjects[obj] = nil
+    end
 end
 
 workspace.DescendantRemoving:Connect(function(obj)
@@ -1059,292 +1079,270 @@ workspace.DescendantRemoving:Connect(function(obj)
 end)
 
 local function createESP(obj, color)
-if not obj then return end
+    if not obj then return end
 
-if ESPObjects[obj] then
-ESPObjects[obj].FillColor = color
-ESPObjects[obj].OutlineColor = color
-return
-end
+    if ESPObjects[obj] then
+        ESPObjects[obj].FillColor = color
+        ESPObjects[obj].OutlineColor = color
+        return
+    end
 
-local h = Instance.new("Highlight")
-h.FillColor = color
-h.OutlineColor = color
-h.FillTransparency = 0.9
-h.OutlineTransparency = 0.3
-h.DepthMode = Enum.HighlightDepthMode.AlwaysOnTop
-h.Parent = obj
+    local h = Instance.new("Highlight")
+    h.FillColor = color
+    h.OutlineColor = color
+    h.FillTransparency = 0.9
+    h.OutlineTransparency = 0.3
+    h.DepthMode = Enum.HighlightDepthMode.AlwaysOnTop
+    h.Parent = obj
 
-ESPObjects[obj] = h
+    ESPObjects[obj] = h
 
-obj.AncestryChanged:Connect(function(_, parent)
-if not parent then
-removeESP(obj)
-end
-end)
-
+    obj.AncestryChanged:Connect(function(_, parent)
+        if not parent then
+            removeESP(obj)
+        end
+    end)
 end
 
 local GeneratorColor = Color3.fromRGB(255, 170, 0)
 local PalletColor = Color3.fromRGB(74, 255, 181)
 local WindowColor = Color3.fromRGB(74, 255, 181)
 local SCPColor = Color3.fromRGB(255, 0, 0)
-local MAX_DISTANCE = function()
-    return ESP.Distance
-end
+local MAX_DISTANCE = function() return ESP.Distance end
 
 local function GetGameValue(obj, name)
-if not obj then return nil end
-
-local attr = obj:GetAttribute(name)
-if attr ~= nil then return attr end
-
-local child = obj:FindFirstChild(name)
-if child then
-local success, val = pcall(function() return child.Value end)
-if success then return val end
-end
-
-return nil
-
+    if not obj then return nil end
+    local attr = obj:GetAttribute(name)
+    if attr ~= nil then return attr end
+    local child = obj:FindFirstChild(name)
+    if child then
+        local success, val = pcall(function() return child.Value end)
+        if success then return val end
+    end
+    return nil
 end
 
 local function ApplyGenHighlight(object, color)
-local h = object:FindFirstChild("GenHighlight") or Instance.new("Highlight")
-h.Name = "GenHighlight"
-h.Adornee = object
-h.FillColor = color
-h.OutlineColor = color
-h.FillTransparency = 0.9
-h.OutlineTransparency = 0.3
-h.DepthMode = Enum.HighlightDepthMode.AlwaysOnTop
-h.Parent = object
+    local h = object:FindFirstChild("GenHighlight") or Instance.new("Highlight")
+    h.Name = "GenHighlight"
+    h.Adornee = object
+    h.FillColor = color
+    h.OutlineColor = color
+    h.FillTransparency = 0.9
+    h.OutlineTransparency = 0.3
+    h.DepthMode = Enum.HighlightDepthMode.AlwaysOnTop
+    h.Parent = object
 end
 
 local function CreateBillboard(text, color)
-local billboard = Instance.new("BillboardGui")
-billboard.Name = "GenESP"
-billboard.Size = UDim2.new(0, 100, 0, 30)
-billboard.AlwaysOnTop = true
+    local billboard = Instance.new("BillboardGui")
+    billboard.Name = "GenESP"
+    billboard.Size = UDim2.new(0, 100, 0, 30)
+    billboard.AlwaysOnTop = true
 
-local label = Instance.new("TextLabel")
-label.Size = UDim2.new(1, 0, 1, 0)
-label.BackgroundTransparency = 1
-label.Text = text
-label.TextColor3 = color
-label.TextStrokeTransparency = 0
-label.Font = Enum.Font.GothamBold
-label.TextSize = 12
-label.Parent = billboard
+    local label = Instance.new("TextLabel")
+    label.Size = UDim2.new(1, 0, 1, 0)
+    label.BackgroundTransparency = 1
+    label.Text = text
+    label.TextColor3 = color
+    label.TextStrokeTransparency = 0
+    label.Font = Enum.Font.GothamBold
+    label.TextSize = 12
+    label.Parent = billboard
 
-return billboard
-
+    return billboard
 end
 
 local function UpdateGenerator(generator)
-if not generator or not generator.Parent then return end
+    if not generator or not generator.Parent then return end
 
-if not ESP.Generator then
-local old = generator:FindFirstChild("GenESP")
-if old then old:Destroy() end
+    if not ESP.Generator then
+        local old = generator:FindFirstChild("GenESP")
+        if old then old:Destroy() end
+        local h = generator:FindFirstChild("GenHighlight")
+        if h then h:Destroy() end
+        return
+    end
 
-local h = generator:FindFirstChild("GenHighlight")
-if h then h:Destroy() end
-return
+    local percent =
+        GetGameValue(generator, "RepairProgress") or
+        GetGameValue(generator, "Progress") or 0
 
-end
+    local billboard = generator:FindFirstChild("GenESP")
 
-local percent =
-GetGameValue(generator, "RepairProgress") or
-GetGameValue(generator, "Progress") or 0
+    if percent >= 100 then
+        if billboard then billboard:Destroy() end
+        return
+    end
 
-local billboard = generator:FindFirstChild("GenESP")
+    local cp = math.clamp(percent, 0, 100)
+    local color = GeneratorColor:Lerp(Color3.fromRGB(0,255,120), cp / 100)
+    local text = string.format("[%.0f%%]", percent)
 
-if percent >= 100 then
-if billboard then billboard:Destroy() end
-return
-end
+    if not billboard then
+        billboard = CreateBillboard(text, color)
+        billboard.Adornee = generator
+        billboard.Parent = generator
+    else
+        local lbl = billboard:FindFirstChildOfClass("TextLabel")
+        if lbl then
+            lbl.Text = text
+            lbl.TextColor3 = color
+        end
+    end
 
-local cp = math.clamp(percent, 0, 100)
-
-local color = GeneratorColor:Lerp(
-    Color3.fromRGB(0,255,120),
-    cp / 100
-)
-
-local text = string.format("[%.0f%%]", percent)
-
-if not billboard then
-billboard = CreateBillboard(text, color)
-billboard.Adornee = generator
-billboard.Parent = generator
-else
-local lbl = billboard:FindFirstChildOfClass("TextLabel")
-if lbl then
-lbl.Text = text
-lbl.TextColor3 = color
-end
-end
-
-ApplyGenHighlight(generator, color)
-
+    ApplyGenHighlight(generator, color)
 end
 
 local function UpdateMapESP(obj, root)
-if not obj or not root then return end
+    if not obj or not root then return end
 
-local pos
-if obj:IsA("Model") then
-pos = obj:GetPivot().Position
-elseif obj:IsA("BasePart") then
-pos = obj.Position
-end
+    local pos
+    if obj:IsA("Model") then
+        pos = obj:GetPivot().Position
+    elseif obj:IsA("BasePart") then
+        pos = obj.Position
+    end
 
-if not pos then return end
+    if not pos then return end
 
-local distance = (pos - root.Position).Magnitude
+    local distance = (pos - root.Position).Magnitude
 
-if obj.Name == "Window" then
-if ESP.Window and distance <= MAX_DISTANCE() then
-createESP(obj, WindowColor)
-else
-removeESP(obj)
-end
-end
+    if obj.Name == "Window" then
+        if ESP.Window and distance <= MAX_DISTANCE() then
+            createESP(obj, WindowColor)
+        else
+            removeESP(obj)
+        end
+    end
 
-if obj.Name == "Pallet" or obj.Name == "Palletwrong" then
-if ESP.Pallet and distance <= MAX_DISTANCE() then
-createESP(obj, PalletColor)
-else
-removeESP(obj)
-end
-end
-
+    if obj.Name == "Pallet" or obj.Name == "Palletwrong" then
+        if ESP.Pallet and distance <= MAX_DISTANCE() then
+            createESP(obj, PalletColor)
+        else
+            removeESP(obj)
+        end
+    end
 end
 
 local StatusESP = {}
 
 local function removeStatusESP(char)
-if StatusESP[char] then
-StatusESP[char]:Destroy()
-StatusESP[char] = nil
-end
+    if StatusESP[char] then
+        StatusESP[char]:Destroy()
+        StatusESP[char] = nil
+    end
 end
 
 local function createStatusESP(player, char, root)
-if not ESPStatus.Enabled then
-removeStatusESP(char)
-return
-end
+    if not ESPStatus.Enabled then
+        removeStatusESP(char)
+        return
+    end
+    if not root then return end
 
-if not root then return end
+    local head = char:FindFirstChild("Head")
+    local hum = char:FindFirstChildOfClass("Humanoid")
+    if not head or not hum then return end
 
-local head = char:FindFirstChild("Head")
-local hum = char:FindFirstChildOfClass("Humanoid")
+    local isDown =
+        hum.Health <= 0
+        or hum.Health < 2
+        or char:GetAttribute("Downed") == true
+        or char:GetAttribute("IsDown") == true
+        or char:GetAttribute("Knocked") == true
 
-if not head or not hum then return end
+    local dist = (head.Position - root.Position).Magnitude
 
-local isDown =
-hum.Health <= 0
-or hum.Health < 2
-or char:GetAttribute("Downed") == true
-or char:GetAttribute("IsDown") == true
-or char:GetAttribute("Knocked") == true
+    if dist > ESPStatus.Radius then
+        removeStatusESP(char)
+        return
+    end
 
-local dist = (head.Position - root.Position).Magnitude
+    local text = ""
 
-if dist > ESPStatus.Radius then
-removeStatusESP(char)
-return
-end
+    if isDown then
+        text = "🔻 DOWN\n"
+    end
 
-local text = ""
+    if ESPStatus.ShowName then
+        text = text .. player.Name .. "\n"
+    end
 
-if isDown then
-text = "🔻 DOWN\n"
-end
+    if ESPStatus.ShowDistance then
+        text = text .. string.format("Dist: %.0f\n", dist)
+    end
 
-if ESPStatus.ShowName then
-text = text .. player.Name .. "\n"
-end
+    if ESPStatus.ShowHealth then
+        text = text .. string.format("HP: %.0f\n", hum.Health)
+    end
 
-if ESPStatus.ShowDistance then
-text = text .. string.format("Dist: %.0f\n", dist)
-end
+    if text == "" then
+        removeStatusESP(char)
+        return
+    end
 
-if ESPStatus.ShowHealth then
-text = text .. string.format("HP: %.0f\n", hum.Health)
-end
+    local billboard = StatusESP[char]
 
-if text == "" then
-removeStatusESP(char)
-return
-end
+    if not billboard then
+        billboard = Instance.new("BillboardGui")
+        billboard.Size = UDim2.new(0, 120, 0, 50)
+        billboard.AlwaysOnTop = true
 
-local billboard = StatusESP[char]
+        local label = Instance.new("TextLabel")
+        label.Size = UDim2.new(1,0,1,0)
+        label.BackgroundTransparency = 1
+        local teamColor = Color3.new(1,1,1)
 
-if not billboard then
-billboard = Instance.new("BillboardGui")
-billboard.Size = UDim2.new(0, 120, 0, 50)
-billboard.AlwaysOnTop = true
+        if player.Team then
+            if player.Team.Name == "Killer" then
+                teamColor = TeamColors.Killer
+            elseif player.Team.Name == "Survivors" then
+                teamColor = TeamColors.Survivor
+            end
+        end
 
-local label = Instance.new("TextLabel")
-label.Size = UDim2.new(1,0,1,0)
-label.BackgroundTransparency = 1
-local teamColor = Color3.new(1,1,1)
+        if isDown then
+            teamColor = Color3.fromRGB(255, 0, 0)
+        end
 
-if player.Team then
-if player.Team.Name == "Killer" then
-teamColor = TeamColors.Killer
-elseif player.Team.Name == "Survivors" then
-teamColor = TeamColors.Survivor
-end
-end
+        label.TextColor3 = teamColor
+        label.TextStrokeTransparency = 0
+        label.Font = Enum.Font.GothamBold
+        label.TextSize = 12
+        label.Text = text
+        label.Parent = billboard
 
-if isDown then
-teamColor = Color3.fromRGB(255, 0, 0)
-end
+        billboard.Adornee = head
+        billboard.StudsOffset = Vector3.new(0, 2.5, 0)
+        billboard.Parent = char
 
-label.TextColor3 = teamColor
-label.TextStrokeTransparency = 0
-label.Font = Enum.Font.GothamBold
-label.TextSize = 12
-label.Text = text
-label.Parent = billboard
+        StatusESP[char] = billboard
+    else
+        local label = billboard:FindFirstChildOfClass("TextLabel")
+        if label then
+            label.Text = text
 
-billboard.Adornee = head
-billboard.StudsOffset = Vector3.new(0, 2.5, 0)
-billboard.Parent = char
+            local teamColor = Color3.new(1,1,1)
 
-StatusESP[char] = billboard
+            if player.Team then
+                if player.Team.Name == "Killer" then
+                    teamColor = TeamColors.Killer
+                elseif player.Team.Name == "Survivors" then
+                    teamColor = TeamColors.Survivor
+                end
+            end
 
-else
-local label = billboard:FindFirstChildOfClass("TextLabel")
-if label then
-label.Text = text
+            if isDown then
+                teamColor = Color3.fromRGB(255, 0, 0)
+            end
 
-local teamColor = Color3.new(1,1,1)
-
-if player.Team then
-if player.Team.Name == "Killer" then
-teamColor = TeamColors.Killer
-elseif player.Team.Name == "Survivors" then
-teamColor = TeamColors.Survivor
-end
-end
-
-if isDown then
-teamColor = Color3.fromRGB(255, 0, 0)
-end
-
-label.TextColor3 = teamColor
-
-end
-end
+            label.TextColor3 = teamColor
+        end
+    end
 end
 
 local function UpdateSCPEsp(root)
-
     if not ESP.SCP then
         for obj in pairs(CachedSCP) do
             removeESP(obj)
@@ -1353,11 +1351,8 @@ local function UpdateSCPEsp(root)
     end
 
     for obj in pairs(CachedSCP) do
-
         if obj and obj.Parent then
-
             local pos
-
             if obj:IsA("Model") then
                 pos = obj:GetPivot().Position
             elseif obj:IsA("BasePart") then
@@ -1366,7 +1361,6 @@ local function UpdateSCPEsp(root)
 
             if pos then
                 local dist = (pos - root.Position).Magnitude
-
                 if dist <= ESP.Distance then
                     createESP(obj, SCPColor)
                 else
@@ -1407,20 +1401,16 @@ local function GetNearestKiller()
 end
 
 local function GetFarthestGeneratorPoint(killerRoot)
-    if not killerRoot then
-        return nil
-    end
+    if not killerRoot then return nil end
 
     local bestPoint = nil
     local farthestDistance = 0
 
     for _, obj in ipairs(workspace:GetDescendants()) do
-
         if obj:IsA("BasePart")
         and string.match(obj.Name, "^GeneratorPoint%d+$") then
 
-            local dist =
-                (obj.Position - killerRoot.Position).Magnitude
+            local dist = (obj.Position - killerRoot.Position).Magnitude
 
             if dist > farthestDistance then
                 farthestDistance = dist
@@ -1474,54 +1464,16 @@ local AttackPaths = {
 }
 
 local function GetParryButton()
-local current = PlayerGui
-for segment in string.gmatch("Survivor-mob.Controls.Gui-mob", "[^%.]+") do
-current = current and current:FindFirstChild(segment)
-end
-return current
-end
-
-local function GetAttackButtonForParry()
-
-    for _, path in ipairs(AttackPaths) do
-
-        local current = PlayerGui
-
-        for segment in string.gmatch(path, "[^%.]+") do
-            current =
-                current and current:FindFirstChild(segment)
-        end
-
-        if current and current:IsA("GuiObject") then
-            return current
-        end
-    end
-
-    return nil
-end
-
-local function GetGunAimButton()
-
     local current = PlayerGui
-
-    for segment in string.gmatch(
-        "Survivor-mob.Controls.Gui-mob",
-        "[^%.]+"
-    ) do
-
-        current =
-            current and current:FindFirstChild(segment)
+    for segment in string.gmatch("Survivor-mob.Controls.Gui-mob", "[^%.]+") do
+        current = current and current:FindFirstChild(segment)
     end
-
     return current
 end
 
 local function GetAttackAimButton()
-
     for _, path in ipairs(AttackPaths) do
-
         local current = PlayerGui
-
         for segment in string.gmatch(path, "[^%.]+") do
             current = current and current:FindFirstChild(segment)
         end
@@ -1530,8 +1482,15 @@ local function GetAttackAimButton()
             return current
         end
     end
-
     return nil
+end
+
+local function GetGunAimButton()
+    local current = PlayerGui
+    for segment in string.gmatch("Survivor-mob.Controls.Gui-mob", "[^%.]+") do
+        current = current and current:FindFirstChild(segment)
+    end
+    return current
 end
 
 UserInputService.InputBegan:Connect(function(input, gp)
@@ -1570,197 +1529,135 @@ local function pressParryButton()
 end
 
 local function doParry()
-local now = tick()
-if now - lastParry < PARRY_DEBOUNCE then return end
-lastParry = now
+    local now = tick()
+    if now - lastParry < PARRY_DEBOUNCE then return end
+    lastParry = now
 
-ParryActive = true
+    ParryActive = true
 
-if Moonwalk.Enabled then
-    Moonwalk.Enabled = false
-end
+    if Moonwalk.Enabled then
+        Moonwalk.Enabled = false
+    end
 
-pressParryButton()
+    pressParryButton()
 
-task.delay(0.3, function()
-    ParryActive = false
-end)
-
+    task.delay(0.3, function()
+        ParryActive = false
+    end)
 end
 
 local function isInParryRange(killerChar)
-local myRoot = getRoot()
-if not myRoot or not killerChar then return false end
+    local myRoot = getRoot()
+    if not myRoot or not killerChar then return false end
 
-local enemyRoot = killerChar:FindFirstChild("HumanoidRootPart")
-if not enemyRoot then return false end
+    local enemyRoot = killerChar:FindFirstChild("HumanoidRootPart")
+    if not enemyRoot then return false end
 
-local dist = (enemyRoot.Position - myRoot.Position).Magnitude
-return dist <= Auto.ParryDistance
-
+    local dist = (enemyRoot.Position - myRoot.Position).Magnitude
+    return dist <= Auto.ParryDistance
 end
 
 local function isFacingTarget(targetChar)
-if not Auto.RequireFacing then return true end
+    if not Auto.RequireFacing then return true end
 
-local myChar = LocalPlayer.Character
-if not myChar then return false end
+    local myChar = LocalPlayer.Character
+    if not myChar then return false end
 
-local myRoot = myChar:FindFirstChild("HumanoidRootPart")
-local enemyRoot = targetChar:FindFirstChild("HumanoidRootPart")
+    local myRoot = myChar:FindFirstChild("HumanoidRootPart")
+    local enemyRoot = targetChar:FindFirstChild("HumanoidRootPart")
 
-if not myRoot or not enemyRoot then return false end
+    if not myRoot or not enemyRoot then return false end
 
-local enemyForward = enemyRoot.CFrame.LookVector
+    local enemyForward = enemyRoot.CFrame.LookVector
+    local directionToMe = (myRoot.Position - enemyRoot.Position).Unit
+    local dot = enemyForward:Dot(directionToMe)
 
-local directionToMe = (myRoot.Position - enemyRoot.Position).Unit
+    if Auto.FaceSensitivity <= -1 then
+        return true
+    end
 
-local dot = enemyForward:Dot(directionToMe)
-
-if Auto.FaceSensitivity <= -1 then
-    return true
-end
-
-return dot >= Auto.FaceSensitivity
-
+    return dot >= Auto.FaceSensitivity
 end
 
 local hookedKillers = {}
 
 local function hookKiller(char)
-if hookedKillers[char] then return end
-hookedKillers[char] = true
+    if hookedKillers[char] then return end
+    hookedKillers[char] = true
 
-local hum = char:FindFirstChildOfClass("Humanoid")
-if not hum then return end
+    local hum = char:FindFirstChildOfClass("Humanoid")
+    if not hum then return end
 
-local animator = hum:FindFirstChildOfClass("Animator")
-if not animator then return end
+    local animator = hum:FindFirstChildOfClass("Animator")
+    if not animator then return end
 
-animator.AnimationPlayed:Connect(function(track)
-if not Auto.Parry then return end
+    animator.AnimationPlayed:Connect(function(track)
+        if not Auto.Parry then return end
 
-local anim = track.Animation
-if not anim then return end
+        local anim = track.Animation
+        if not anim then return end
 
-local id = anim.AnimationId:match("%d+")
-if not id then return end
+        local id = anim.AnimationId:match("%d+")
+        if not id then return end
 
-local fullId = "rbxassetid://" .. id
+        local fullId = "rbxassetid://" .. id
 
-if KillerAnims[fullId] then
-if not isInParryRange(char) then return end
-if not isFacingTarget(char) then return end
+        if KillerAnims[fullId] then
+            if not isInParryRange(char) then return end
+            if not isFacingTarget(char) then return end
 
-doParry()
-
-end
-end)
-
-end
-
-local function scanKillers()
-for _, p in pairs(game:GetService("Players"):GetPlayers()) do
-if p ~= LocalPlayer and p.Character and p.Team and p.Team.Name == "Killer" then
-hookKiller(p.Character)
-end
-end
+            doParry()
+        end
+    end)
 end
 
 local RayParams = RaycastParams.new()
-
-RayParams.FilterType =
-    Enum.RaycastFilterType.Blacklist
+RayParams.FilterType = Enum.RaycastFilterType.Blacklist
 
 local function isVisible(part)
-
     local cam = workspace.CurrentCamera
-
-    RayParams.FilterDescendantsInstances = {
-        LocalPlayer.Character
-    }
+    RayParams.FilterDescendantsInstances = { LocalPlayer.Character }
 
     local origin = cam.CFrame.Position
+    local direction = (part.Position - origin)
 
-    local direction =
-        (part.Position - origin)
-
-    local result =
-        workspace:Raycast(
-            origin,
-            direction,
-            RayParams
-        )
+    local result = workspace:Raycast(origin, direction, RayParams)
 
     if not result then
         return true
     end
 
-    return result.Instance:IsDescendantOf(
-        part.Parent
-    )
+    return result.Instance:IsDescendantOf(part.Parent)
 end
 
 local function getClosestGunTarget()
-
     local cam = workspace.CurrentCamera
-
-    local center = Vector2.new(
-        cam.ViewportSize.X / 2,
-        cam.ViewportSize.Y / 2
-    )
+    local center = Vector2.new(cam.ViewportSize.X / 2, cam.ViewportSize.Y / 2)
 
     local closest = nil
     local shortest = GunAim.FOV
 
     for _, p in pairs(Players:GetPlayers()) do
-
-        if p ~= LocalPlayer
-        and p.Character
-        and p.Team then
-
+        if p ~= LocalPlayer and p.Character and p.Team then
             local valid = false
 
-            if GunAim.TargetMode == "Killer"
-            and p.Team.Name == "Killer" then
-
+            if GunAim.TargetMode == "Killer" and p.Team.Name == "Killer" then
                 valid = true
-
-            elseif GunAim.TargetMode == "Survivor"
-            and p.Team.Name == "Survivors" then
-
+            elseif GunAim.TargetMode == "Survivor" and p.Team.Name == "Survivors" then
                 valid = true
             end
 
             if valid then
-
-                local hrp =
-                    p.Character:FindFirstChild(
-                        GunAim.AimPart
-                    )
-
-                local hum =
-                    p.Character:FindFirstChildOfClass(
-                        "Humanoid"
-                    )
+                local hrp = p.Character:FindFirstChild(GunAim.AimPart)
+                local hum = p.Character:FindFirstChildOfClass("Humanoid")
 
                 if hrp and hum and hum.Health > 0 then
-
-                    local pos, visible =
-                        cam:WorldToViewportPoint(
-                            hrp.Position
-                        )
+                    local pos, visible = cam:WorldToViewportPoint(hrp.Position)
 
                     if visible then
-
-                        local dist =
-                            (
-                                Vector2.new(pos.X, pos.Y)
-                                - center
-                            ).Magnitude
+                        local dist = (Vector2.new(pos.X, pos.Y) - center).Magnitude
 
                         if dist < shortest then
-
                             if GunAim.VisibilityCheck then
                                 if not isVisible(hrp) then
                                     continue
@@ -1777,40 +1674,22 @@ local function getClosestGunTarget()
     end
 
     if GunAim.TargetMode == "SCP" then
-
         for obj in pairs(CachedSCP) do
-
             if obj and obj.Parent then
-
                 local part
-
                 if obj:IsA("Model") then
-                    part =
-                        obj.PrimaryPart
-                        or obj:FindFirstChildWhichIsA(
-                            "BasePart"
-                        )
+                    part = obj.PrimaryPart or obj:FindFirstChildWhichIsA("BasePart")
                 elseif obj:IsA("BasePart") then
                     part = obj
                 end
 
                 if part then
-
-                    local pos, visible =
-                        cam:WorldToViewportPoint(
-                            part.Position
-                        )
+                    local pos, visible = cam:WorldToViewportPoint(part.Position)
 
                     if visible then
-
-                        local dist =
-                            (
-                                Vector2.new(pos.X, pos.Y)
-                                - center
-                            ).Magnitude
+                        local dist = (Vector2.new(pos.X, pos.Y) - center).Magnitude
 
                         if dist < shortest then
-
                             shortest = dist
                             closest = part
                         end
@@ -1824,48 +1703,22 @@ local function getClosestGunTarget()
 end
 
 local function getClosestAttackTarget()
-
     local cam = workspace.CurrentCamera
-
-    local center = Vector2.new(
-        cam.ViewportSize.X / 2,
-        cam.ViewportSize.Y / 2
-    )
+    local center = Vector2.new(cam.ViewportSize.X / 2, cam.ViewportSize.Y / 2)
 
     local closest = nil
     local shortest = AttackAim.FOV
 
     for _, p in ipairs(Players:GetPlayers()) do
-
-        if p ~= LocalPlayer
-        and p.Team
-        and p.Team.Name == "Survivors"
-        and p.Character then
-
-            local hrp =
-                p.Character:FindFirstChild(
-                    AttackAim.AimPart
-                )
-
-            local hum =
-                p.Character:FindFirstChildOfClass(
-                    "Humanoid"
-                )
+        if p ~= LocalPlayer and p.Team and p.Team.Name == "Survivors" and p.Character then
+            local hrp = p.Character:FindFirstChild(AttackAim.AimPart)
+            local hum = p.Character:FindFirstChildOfClass("Humanoid")
 
             if hrp and hum and hum.Health > 0 then
-
-                local pos, visible =
-                    cam:WorldToViewportPoint(
-                        hrp.Position
-                    )
+                local pos, visible = cam:WorldToViewportPoint(hrp.Position)
 
                 if visible then
-
-                    local dist =
-                        (
-                            Vector2.new(pos.X, pos.Y)
-                            - center
-                        ).Magnitude
+                    local dist = (Vector2.new(pos.X, pos.Y) - center).Magnitude
 
                     if dist < shortest then
                         shortest = dist
@@ -1882,14 +1735,10 @@ end
 local GunAimConnection = nil
 
 local function startGunAim()
-
-    if GunAimConnection then
-        return
-    end
+    if GunAimConnection then return end
 
     GunAimConnection =
         RunService.RenderStepped:Connect(function()
-
             if not GunAim.Enabled then
                 GunAim.Target = nil
                 return
@@ -1900,178 +1749,62 @@ local function startGunAim()
                 return
             end
 
-            local cam =
-                workspace.CurrentCamera
+            local cam = workspace.CurrentCamera
+            local target = getClosestGunTarget()
 
-            local target =
-                getClosestGunTarget()
-
-            if not target then
-                return
-            end
+            if not target then return end
 
             local pos = target.Position
 
             if GunAim.Predict then
-
-                pos =
-                    pos +
-                    (
-                        target.AssemblyLinearVelocity
-                        * GunAim.PredictStrength
-                    )
+                pos = pos + (target.AssemblyLinearVelocity * GunAim.PredictStrength)
             end
 
-            local cf =
-                CFrame.new(
-                    cam.CFrame.Position,
-                    pos
-                )
-
-            cam.CFrame =
-                cam.CFrame:Lerp(
-                    cf,
-                    GunAim.Strength
-                )
+            local cf = CFrame.new(cam.CFrame.Position, pos)
+            cam.CFrame = cam.CFrame:Lerp(cf, GunAim.Strength)
         end)
 end
 
 local AttackAimConnection
 
 local function startAttackAim()
-
-    if AttackAimConnection then
-        return
-    end
+    if AttackAimConnection then return end
 
     AttackAimConnection =
         RunService.RenderStepped:Connect(function()
-
             if not AttackAim.Enabled then return end
             if not AttackAim.Holding then return end
 
-            local target =
-                getClosestAttackTarget()
-
+            local target = getClosestAttackTarget()
             if not target then return end
 
             local cam = workspace.CurrentCamera
-
             local pos = target.Position
 
             if AttackAim.Predict then
-                pos =
-                    pos +
-                    (
-                        target.AssemblyLinearVelocity
-                        * AttackAim.PredictStrength
-                    )
+                pos = pos + (target.AssemblyLinearVelocity * AttackAim.PredictStrength)
             end
 
-            cam.CFrame =
-                CFrame.new(
-                    cam.CFrame.Position,
-                    pos
-                )
+            cam.CFrame = CFrame.new(cam.CFrame.Position, pos)
         end)
 end
 
-local GunAimButtonConnection = nil
-local CurrentGunButton = nil
-
-task.spawn(function()
-
-    while true do
-        task.wait(1)
-
-        local btn = GetGunAimButton()
-
-        if not btn then
-            CurrentGunButton = nil
-            continue
-        end
-
-        if btn ~= CurrentGunButton then
-
-            CurrentGunButton = btn
-
-            if GunAimButtonConnection then
-                GunAimButtonConnection:Disconnect()
-                GunAimButtonConnection = nil
-            end
-
-            btn.InputBegan:Connect(function(input)
-
-                if input.UserInputType == Enum.UserInputType.Touch
-                or input.UserInputType == Enum.UserInputType.MouseButton2 then
-
-                    GunAim.Holding = true
-                end
-            end)
-
-            btn.InputEnded:Connect(function(input)
-
-                if input.UserInputType == Enum.UserInputType.Touch
-                or input.UserInputType == Enum.UserInputType.MouseButton2 then
-
-                    GunAim.Holding = false
-                end
-            end)
-        end
-    end
-end)
-
-local CurrentAttackButton = nil
-
-task.spawn(function()
-
-    while true do
-        task.wait(1)
-
-        local btn = GetAttackAimButton()
-
-        if btn and btn ~= CurrentAttackButton then
-
-            CurrentAttackButton = btn
-
-            btn.InputBegan:Connect(function(input)
-
-                if input.UserInputType ==
-                    Enum.UserInputType.Touch then
-
-                    AttackAim.Holding = true
-                end
-            end)
-
-            btn.InputEnded:Connect(function(input)
-
-                if input.UserInputType ==
-                    Enum.UserInputType.Touch then
-
-                    AttackAim.Holding = false
-                end
-            end)
-        end
-    end
-end)
-
 local function isDowned()
-local char = LocalPlayer.Character
-if not char then return false end
+    local char = LocalPlayer.Character
+    if not char then return false end
 
-local hum = char:FindFirstChildOfClass("Humanoid")
-if not hum then return false end
+    local hum = char:FindFirstChildOfClass("Humanoid")
+    if not hum then return false end
 
-return hum.Health <= 0
-or hum.Health < 2
-or char:GetAttribute("Downed") == true
-or char:GetAttribute("IsDown") == true
-or char:GetAttribute("Knocked") == true
+    return hum.Health <= 0
+        or hum.Health < 2
+        or char:GetAttribute("Downed") == true
+        or char:GetAttribute("IsDown") == true
+        or char:GetAttribute("Knocked") == true
 end
 
 local function createMoonwalkButton()
     if not PlayerGui or not PlayerGui.Parent then return end
-
     if MoonwalkButton then MoonwalkButton:Destroy() end
 
     local gui = Instance.new("ScreenGui")
@@ -2082,10 +1815,8 @@ local function createMoonwalkButton()
     local btn = Instance.new("ImageButton")
     btn.Size = UDim2.new(0, 60, 0, 60)
     btn.Position = UDim2.new(0.65, 0, 0.75, 0)
-
     btn.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
     btn.BackgroundTransparency = 0.9
-
     btn.Parent = gui
 
     local corner = Instance.new("UICorner")
@@ -2106,40 +1837,37 @@ local function createMoonwalkButton()
     img.Image = LOGO_ID
     img.Parent = btn
 
-btn.MouseButton1Click:Connect(function()
-    Moonwalk.Enabled = not Moonwalk.Enabled
+    btn.MouseButton1Click:Connect(function()
+        Moonwalk.Enabled = not Moonwalk.Enabled
 
-    local char = LocalPlayer.Character
-    local hum = char and char:FindFirstChildOfClass("Humanoid")
+        local char = LocalPlayer.Character
+        local hum = char and char:FindFirstChildOfClass("Humanoid")
 
-    if Moonwalk.Enabled then
-        stroke.Color = Color3.fromRGB(180, 80, 255)
-
-        if not MoonwalkConnection then
-            startMoonwalk()
-        end
-
-    else
-        stroke.Color = Color3.fromRGB(255,255,255)
-
-        if hum then
-            if Movement.WalkSpeedEnabled then
-                hum.WalkSpeed = Movement.WalkSpeedValue
-            else
-                hum.WalkSpeed = 16
+        if Moonwalk.Enabled then
+            stroke.Color = Color3.fromRGB(180, 80, 255)
+            if not MoonwalkConnection then
+                startMoonwalk()
+            end
+        else
+            stroke.Color = Color3.fromRGB(255,255,255)
+            if hum then
+                if Movement.WalkSpeedEnabled then
+                    hum.WalkSpeed = Movement.WalkSpeedValue
+                else
+                    hum.WalkSpeed = 16
+                end
             end
         end
-    end
-end)
+    end)
 
     MoonwalkButton = gui
 end
 
 local function removeMoonwalkButton()
-if MoonwalkButton then
-MoonwalkButton:Destroy()
-MoonwalkButton = nil
-end
+    if MoonwalkButton then
+        MoonwalkButton:Destroy()
+        MoonwalkButton = nil
+    end
 end
 
 local function pressSpace()
@@ -2152,74 +1880,70 @@ local TouchID = 8822
 local ActionPath = "Survivor-mob.Controls.action.check"
 
 local SkillHeartbeat = nil
-local SkillVisibility = nil
 
 local function GetActionTarget()
-local current = PlayerGui
-for segment in string.gmatch(ActionPath, "[^%.]+") do
-current = current and current:FindFirstChild(segment)
-end
-return current
+    local current = PlayerGui
+    for segment in string.gmatch(ActionPath, "[^%.]+") do
+        current = current and current:FindFirstChild(segment)
+    end
+    return current
 end
 
 local function TriggerMobileButton()
-local b = GetActionTarget()
-if b and b:IsA("GuiObject") then
-local p, s, i = b.AbsolutePosition, b.AbsoluteSize, game:GetService("GuiService"):GetGuiInset()
-local cx, cy = p.X + (s.X/2) + i.X, p.Y + (s.Y/2) + i.Y
-pcall(function()
-VirtualInputManager:SendTouchEvent(TouchID, 0, cx, cy)
-task.wait(0.01)
-VirtualInputManager:SendTouchEvent(TouchID, 2, cx, cy)
-end)
-end
+    local b = GetActionTarget()
+    if b and b:IsA("GuiObject") then
+        local p, s, i = b.AbsolutePosition, b.AbsoluteSize, game:GetService("GuiService"):GetGuiInset()
+        local cx, cy = p.X + (s.X/2) + i.X, p.Y + (s.Y/2) + i.Y
+        pcall(function()
+            VirtualInputManager:SendTouchEvent(TouchID, 0, cx, cy)
+            task.wait(0.01)
+            VirtualInputManager:SendTouchEvent(TouchID, 2, cx, cy)
+        end)
+    end
 end
 
 local busy = false
 
 local function startSkillCheck()
-if SkillHeartbeat then SkillHeartbeat:Disconnect() end
+    if SkillHeartbeat then SkillHeartbeat:Disconnect() end
 
-SkillHeartbeat = RunService.RenderStepped:Connect(function()
-if not Auto.SkillCheck or busy then return end
+    SkillHeartbeat = RunService.RenderStepped:Connect(function()
+        if not Auto.SkillCheck or busy then return end
 
-local prompt = PlayerGui:FindFirstChild("SkillCheckPromptGui")
-if not prompt then return end
+        local prompt = PlayerGui:FindFirstChild("SkillCheckPromptGui")
+        if not prompt then return end
 
-local check = prompt:FindFirstChild("Check")
-if not check or not check.Visible then return end
+        local check = prompt:FindFirstChild("Check")
+        if not check or not check.Visible then return end
 
-local line = check:FindFirstChild("Line")
-local goal = check:FindFirstChild("Goal")
-if not line or not goal then return end
+        local line = check:FindFirstChild("Line")
+        local goal = check:FindFirstChild("Goal")
+        if not line or not goal then return end
 
-local lr = line.Rotation % 360
-local gr = goal.Rotation % 360
+        local lr = line.Rotation % 360
+        local gr = goal.Rotation % 360
 
-local startRange = (gr + 102) % 360
-local endRange   = (gr + 116) % 360
+        local startRange = (gr + 102) % 360
+        local endRange   = (gr + 116) % 360
 
-local success =
-(startRange > endRange and (lr >= startRange or lr <= endRange))
-or (lr >= startRange and lr <= endRange)
+        local success =
+            (startRange > endRange and (lr >= startRange or lr <= endRange))
+            or (lr >= startRange and lr <= endRange)
 
-if success then
-busy = true
+        if success then
+            busy = true
 
-task.spawn(function()
-if UserInputService.TouchEnabled then
-    TriggerMobileButton()
-else
-    pressSpace()
-end
-task.wait(0.05)
-busy = false
-end)
-
-end
-
-end)
-
+            task.spawn(function()
+                if UserInputService.TouchEnabled then
+                    TriggerMobileButton()
+                else
+                    pressSpace()
+                end
+                task.wait(0.05)
+                busy = false
+            end)
+        end
+    end)
 end
 
 local StalkConnection = nil
@@ -2257,9 +1981,9 @@ local function startAutoStalk()
         if not target or not target.Character then return end
 
         local stalkEvent = ReplicatedStorage:FindFirstChild("Remotes", true)
-                          and ReplicatedStorage.Remotes:FindFirstChild("Killers", true)
-                          and ReplicatedStorage.Remotes.Killers:FindFirstChild("Stalker", true)
-                          and ReplicatedStorage.Remotes.Killers.Stalker:FindFirstChild("StartStalking")
+            and ReplicatedStorage.Remotes:FindFirstChild("Killers", true)
+            and ReplicatedStorage.Remotes.Killers:FindFirstChild("Stalker", true)
+            and ReplicatedStorage.Remotes.Killers.Stalker:FindFirstChild("StartStalking")
 
         if stalkEvent then
             pcall(function()
@@ -2277,36 +2001,25 @@ local function stopAutoStalk()
 end
 
 task.spawn(function()
-
     while task.wait(0.2) do
-
         if not AutoFlee.Enabled then
             continue
         end
 
         local root = getRoot()
+        if not root then continue end
 
-        if not root then
-            continue
-        end
-
-        local killerRoot, distance =
-            GetNearestKiller()
+        local killerRoot, distance = GetNearestKiller()
 
         if killerRoot
         and distance <= AutoFlee.DetectDistance
         and tick() - LastFlee > AutoFlee.Cooldown then
 
-            local point =
-                GetFarthestGeneratorPoint(killerRoot)
+            local point = GetFarthestGeneratorPoint(killerRoot)
 
             if point then
-
                 LastFlee = tick()
-
-                root.CFrame =
-                    point.CFrame +
-                    Vector3.new(0, 5, 0)
+                root.CFrame = point.CFrame + Vector3.new(0, 5, 0)
             end
         end
     end
@@ -2363,7 +2076,6 @@ local JerkTool = {
 }
 
 local currentJerkTool = nil
-local jerkConnection = nil
 
 local function createJerkTool()
     if currentJerkTool then currentJerkTool:Destroy() end
@@ -2433,20 +2145,13 @@ LocalPlayer.CharacterAdded:Connect(function()
 end)
 
 local function teleportToFinishLine()
-
     local root = getRoot()
-
-    if not root then
-        return
-    end
+    if not root then return end
 
     local found = nil
 
     for _, obj in ipairs(workspace:GetDescendants()) do
-
-        if string.lower(obj.Name) == "fininshline"
-        and obj:IsA("BasePart") then
-
+        if string.lower(obj.Name) == "fininshline" and obj:IsA("BasePart") then
             found = obj
             break
         end
@@ -2457,32 +2162,29 @@ local function teleportToFinishLine()
         return
     end
 
-    root.CFrame =
-        found.CFrame + Vector3.new(0, 5, 0)
-
+    root.CFrame = found.CFrame + Vector3.new(0, 5, 0)
 end
 
 local Visual = {
-Fullbright = false,
-NoShadow = false,
-Ambient = false,
-AmbientColor = Color3.fromRGB(255,255,255),
-ClockTimeEnabled = true,
-Brightness = 2,
-ClockTime = 14,
-LowGraphics = false,
-LowRender = false,
-NoFog = false,
-CleanSky = false,
-NoScreenEffects = false
+    Fullbright = false,
+    NoShadow = false,
+    Ambient = false,
+    AmbientColor = Color3.fromRGB(255,255,255),
+    ClockTimeEnabled = true,
+    Brightness = 2,
+    ClockTime = 14,
+    LowGraphics = false,
+    NoFog = false,
+    CleanSky = false,
+    NoScreenEffects = false
 }
 
 local original = {
-Brightness = Lighting.Brightness,
-ClockTime = Lighting.ClockTime,
-Ambient = Lighting.Ambient,
-OutdoorAmbient = Lighting.OutdoorAmbient,
-GlobalShadows = Lighting.GlobalShadows
+    Brightness = Lighting.Brightness,
+    ClockTime = Lighting.ClockTime,
+    Ambient = Lighting.Ambient,
+    OutdoorAmbient = Lighting.OutdoorAmbient,
+    GlobalShadows = Lighting.GlobalShadows
 }
 
 local LastVisualState = {
@@ -2495,34 +2197,24 @@ local LastVisualState = {
 }
 
 local function applyVisual(force)
-
-    if force
-    or LastVisualState.Fullbright ~= Visual.Fullbright then
-
+    if force or LastVisualState.Fullbright ~= Visual.Fullbright then
         LastVisualState.Fullbright = Visual.Fullbright
 
         if Visual.Fullbright then
-
             Lighting.Brightness = 2
             Lighting.ClockTime = 14
             Lighting.Ambient = Color3.new(1,1,1)
             Lighting.OutdoorAmbient = Color3.new(1,1,1)
-
         else
-
             Lighting.Brightness = original.Brightness
             Lighting.ClockTime = original.ClockTime
             Lighting.Ambient = original.Ambient
             Lighting.OutdoorAmbient = original.OutdoorAmbient
-
         end
     end
 
-    if force
-    or LastVisualState.NoShadow ~= Visual.NoShadow then
-
+    if force or LastVisualState.NoShadow ~= Visual.NoShadow then
         LastVisualState.NoShadow = Visual.NoShadow
-
         Lighting.GlobalShadows = not Visual.NoShadow
     end
 
@@ -2533,26 +2225,21 @@ local function applyVisual(force)
         or LastVisualState.ClockTime ~= Visual.ClockTime
 
     if force or ambientChanged then
-
         LastVisualState.Ambient = Visual.Ambient
         LastVisualState.AmbientColor = Visual.AmbientColor
         LastVisualState.Brightness = Visual.Brightness
         LastVisualState.ClockTime = Visual.ClockTime
 
         if Visual.Ambient then
-
             Lighting.Ambient = Visual.AmbientColor
             Lighting.OutdoorAmbient = Visual.AmbientColor
             Lighting.Brightness = Visual.Brightness
             Lighting.ClockTime = Visual.ClockTime
-
         elseif not Visual.Fullbright then
-
             Lighting.Brightness = original.Brightness
             Lighting.ClockTime = original.ClockTime
             Lighting.Ambient = original.Ambient
             Lighting.OutdoorAmbient = original.OutdoorAmbient
-
         end
     end
 end
@@ -2570,17 +2257,16 @@ local Crosshair = {
 local CrosshairDrawings = {}
 
 local function clearCrosshair()
-for _,v in pairs(CrosshairDrawings) do
-if v.Remove then v:Remove() end
-end
-CrosshairDrawings = {}
+    for _,v in pairs(CrosshairDrawings) do
+        if v.Remove then v:Remove() end
+    end
+    CrosshairDrawings = {}
 end
 
 local created = false
 local LastCrosshairStyle = nil
 
 local function drawCrosshair()
-
     if not Crosshair.Enabled then
         for _,v in pairs(CrosshairDrawings) do
             if v then
@@ -2597,7 +2283,6 @@ local function drawCrosshair()
     end
 
     local cam = workspace.CurrentCamera
-
     local center = Vector2.new(
         cam.ViewportSize.X / 2 + Crosshair.OffsetX,
         cam.ViewportSize.Y / 2 + Crosshair.OffsetY
@@ -2607,32 +2292,25 @@ local function drawCrosshair()
         created = true
 
         if Crosshair.Style == "Plus" then
-
             for i = 1,4 do
                 local line = Drawing.new("Line")
                 line.Visible = true
                 table.insert(CrosshairDrawings, line)
             end
-
         elseif Crosshair.Style == "Dot" then
-
             local dot = Drawing.new("Circle")
             dot.Filled = true
             dot.Visible = true
             table.insert(CrosshairDrawings, dot)
-
         elseif Crosshair.Style == "Circle" then
-
             local circle = Drawing.new("Circle")
             circle.Filled = false
             circle.Visible = true
             table.insert(CrosshairDrawings, circle)
-
         end
     end
 
     if Crosshair.Style == "Plus" then
-
         for _,line in pairs(CrosshairDrawings) do
             line.Color = Crosshair.Color
             line.Thickness = Crosshair.Thickness
@@ -2640,110 +2318,85 @@ local function drawCrosshair()
 
         CrosshairDrawings[1].From = center + Vector2.new(-Crosshair.Size,0)
         CrosshairDrawings[1].To   = center + Vector2.new(-2,0)
-
         CrosshairDrawings[2].From = center + Vector2.new(Crosshair.Size,0)
         CrosshairDrawings[2].To   = center + Vector2.new(2,0)
-
         CrosshairDrawings[3].From = center + Vector2.new(0,-Crosshair.Size)
         CrosshairDrawings[3].To   = center + Vector2.new(0,-2)
-
         CrosshairDrawings[4].From = center + Vector2.new(0,Crosshair.Size)
         CrosshairDrawings[4].To   = center + Vector2.new(0,2)
-
     elseif Crosshair.Style == "Dot" then
-
         local dot = CrosshairDrawings[1]
-
         dot.Position = center
         dot.Radius = Crosshair.Size / 2
         dot.Color = Crosshair.Color
-
     elseif Crosshair.Style == "Circle" then
-
         local circle = CrosshairDrawings[1]
-
         circle.Position = center
         circle.Radius = Crosshair.Size
         circle.Color = Crosshair.Color
         circle.Thickness = Crosshair.Thickness
-
     end
 end
 
 local function updateParryCircle()
-local root = getRoot()
+    local root = getRoot()
 
-if not ParryRangeVisual.Enabled or not root then
-    if ParryCircle then
-        ParryCircle:Destroy()
-        ParryCircle = nil
+    if not ParryRangeVisual.Enabled or not root then
+        if ParryCircle then
+            ParryCircle:Destroy()
+            ParryCircle = nil
+        end
+        return
     end
-    return
-end
 
-if not ParryCircle then
-    ParryCircle = Instance.new("Part")
-    ParryCircle.Shape = Enum.PartType.Cylinder
-    ParryCircle.Anchored = true
-    ParryCircle.CanCollide = false
-    ParryCircle.Material = Enum.Material.Neon
-    ParryCircle.Name = "ParryRangeCircle"
-    ParryCircle.Parent = workspace
-end
+    if not ParryCircle then
+        ParryCircle = Instance.new("Part")
+        ParryCircle.Shape = Enum.PartType.Cylinder
+        ParryCircle.Anchored = true
+        ParryCircle.CanCollide = false
+        ParryCircle.Material = Enum.Material.Neon
+        ParryCircle.Name = "ParryRangeCircle"
+        ParryCircle.Parent = workspace
+    end
 
-local size = Auto.ParryDistance * 2
+    local size = Auto.ParryDistance * 2
+    ParryCircle.Size = Vector3.new(0.2, size, size)
+    local yOffset = root.Size.Y / 2 + 1.5
 
-ParryCircle.Size = Vector3.new(0.2, size, size)
-local yOffset = root.Size.Y / 2 + 1.5
+    ParryCircle.CFrame =
+        CFrame.new(root.Position - Vector3.new(0, yOffset, 0))
+        * CFrame.Angles(0, 0, math.rad(90))
 
-ParryCircle.CFrame =
-    CFrame.new(root.Position - Vector3.new(0, yOffset, 0))
-    * CFrame.Angles(0, 0, math.rad(90))
-
-ParryCircle.Color = ParryRangeVisual.Color
-ParryCircle.Transparency = ParryRangeVisual.Transparency
-
+    ParryCircle.Color = ParryRangeVisual.Color
+    ParryCircle.Transparency = ParryRangeVisual.Transparency
 end
 
 local LastOptimizationState = {
     LowGraphics = nil,
-    LowRender = nil,
     CleanSky = nil
 }
 
 local function applyOptimization(force)
-
-    if force
-    or LastOptimizationState.LowGraphics ~= Visual.LowGraphics then
-
+    if force or LastOptimizationState.LowGraphics ~= Visual.LowGraphics then
         LastOptimizationState.LowGraphics = Visual.LowGraphics
-
         pcall(function()
-
             if Visual.LowGraphics then
-                settings().Rendering.QualityLevel =
-                    Enum.QualityLevel.Level01
+                settings().Rendering.QualityLevel = Enum.QualityLevel.Level01
             else
-                settings().Rendering.QualityLevel =
-                    Enum.QualityLevel.Automatic
+                settings().Rendering.QualityLevel = Enum.QualityLevel.Automatic
             end
-
         end)
     end
 
-    if force
-    or LastOptimizationState.CleanSky ~= Visual.CleanSky then
-
+    if force or LastOptimizationState.CleanSky ~= Visual.CleanSky then
         LastOptimizationState.CleanSky = Visual.CleanSky
 
         if Visual.CleanSky then
-
-        for _, v in ipairs(Lighting:GetChildren()) do
-            if v:IsA("Sky") then
-                v:Destroy()
-                 end
-             end
-
+            for _, v in ipairs(Lighting:GetChildren()) do
+                if v:IsA("Sky") then
+                    v:Destroy()
+                end
+            end
         end
     end
 end
@@ -2790,36 +2443,33 @@ Lighting.ChildAdded:Connect(function(v)
 end)
 
 local Cached = {
-Generators = {},
-Windows = {},
-Pallets = {}
+    Generators = {},
+    Windows = {},
+    Pallets = {}
 }
 
 local function cacheObject(obj)
-if obj.Name == "Generator" then
-Cached.Generators[obj] = true
-elseif obj.Name == "Window" then
-Cached.Windows[obj] = true
-elseif obj.Name == "Pallet" or obj.Name == "Palletwrong" then
-Cached.Pallets[obj] = true
-end
+    if obj.Name == "Generator" then
+        Cached.Generators[obj] = true
+    elseif obj.Name == "Window" then
+        Cached.Windows[obj] = true
+    elseif obj.Name == "Pallet" or obj.Name == "Palletwrong" then
+        Cached.Pallets[obj] = true
+    end
 end
 
 local function removeCache(obj)
-Cached.Generators[obj] = nil
-Cached.Windows[obj] = nil
-Cached.Pallets[obj] = nil
+    Cached.Generators[obj] = nil
+    Cached.Windows[obj] = nil
+    Cached.Pallets[obj] = nil
 end
 
 for _, obj in ipairs(workspace:GetDescendants()) do
-cacheObject(obj)
+    cacheObject(obj)
 end
 
 workspace.DescendantAdded:Connect(cacheObject)
 workspace.DescendantRemoving:Connect(removeCache)
-
-local currentTarget = nil
-local carryBusy = false
 
 local Emote = {
     Selected = "Mannrobics"
@@ -3104,9 +2754,7 @@ RunService.RenderStepped:Connect(function()
                     local baseCF = CFrame.new(hrp.Position, hrp.Position - lookDir)
                     local angle = math.sin(tick() * Moonwalk.SpamSpeed) * Moonwalk.Intensity
                     local finalCF = baseCF * CFrame.Angles(0, math.rad(angle), 0)
-
                     local targetRotation = CFrame.new(hrp.Position) * (finalCF - finalCF.Position)
-
                     hrp.CFrame = hrp.CFrame:Lerp(targetRotation, 0.25)
                 end
             end
@@ -3123,235 +2771,174 @@ RunService.RenderStepped:Connect(function()
 end)
 
 RunService.RenderStepped:Connect(function()
-
     if CameraZoom.FOVEnabled then
         local cam = workspace.CurrentCamera
-
         if cam and cam.FieldOfView ~= CameraZoom.FOV then
             cam.FieldOfView = CameraZoom.FOV
         end
     end
-
 end)
 
 local FastVault = {
-Enabled = false,
-Speed = 1.2,
-
-ReplaceMap = {
-["rbxassetid://83873880822918"]  = "rbxassetid://136962284480779"
-}
-
+    Enabled = false,
+    Speed = 1.2,
+    ReplaceMap = {
+        ["rbxassetid://83873880822918"] = "rbxassetid://136962284480779"
+    }
 }
 
 local VaultTracks = {}
 
 local function normalizeId(id)
-local num = tostring(id):match("%d+")
-return num and ("rbxassetid://" .. num)
+    local num = tostring(id):match("%d+")
+    return num and ("rbxassetid://" .. num)
 end
 
 local function hookVault(char)
-local hum = char:FindFirstChildOfClass("Humanoid")
-if not hum then return end
+    local hum = char:FindFirstChildOfClass("Humanoid")
+    if not hum then return end
 
-local animator = hum:FindFirstChildOfClass("Animator")
-if not animator then return end
+    local animator = hum:FindFirstChildOfClass("Animator")
+    if not animator then return end
 
-animator.AnimationPlayed:Connect(function(track)
-if not FastVault.Enabled then return end
+    animator.AnimationPlayed:Connect(function(track)
+        if not FastVault.Enabled then return end
 
-local anim = track.Animation
-if not anim or not anim.AnimationId then return end
+        local anim = track.Animation
+        if not anim or not anim.AnimationId then return end
 
-local id = normalizeId(anim.AnimationId)
-if not id then return end
+        local id = normalizeId(anim.AnimationId)
+        if not id then return end
 
-local replaceId = FastVault.ReplaceMap[id]
-if not replaceId then return end
+        local replaceId = FastVault.ReplaceMap[id]
+        if not replaceId then return end
 
-if VaultTracks[track] then return end
-VaultTracks[track] = true
+        if VaultTracks[track] then return end
+        VaultTracks[track] = true
 
-track:Stop()
+        track:Stop()
 
-local newAnim = Instance.new("Animation")
-newAnim.AnimationId = replaceId
+        local newAnim = Instance.new("Animation")
+        newAnim.AnimationId = replaceId
 
-local newTrack = animator:LoadAnimation(newAnim)
+        local newTrack = animator:LoadAnimation(newAnim)
+        newTrack.Priority = Enum.AnimationPriority.Action
+        newTrack:Play()
+        newTrack:AdjustSpeed(FastVault.Speed)
 
-newTrack.Priority = Enum.AnimationPriority.Action
-
-newTrack:Play()
-newTrack:AdjustSpeed(FastVault.Speed)
-
-newTrack.Stopped:Connect(function()
-VaultTracks[track] = nil
-end)
-
-end)
-
+        newTrack.Stopped:Connect(function()
+            VaultTracks[track] = nil
+        end)
+    end)
 end
 
 LocalPlayer.CharacterAdded:Connect(function(char)
-task.wait(0.5)
-applyUnlimitedZoom()
-hookVault(char)
+    task.wait(0.5)
+    applyUnlimitedZoom()
+    hookVault(char)
 end)
 
 if LocalPlayer.Character then
-hookVault(LocalPlayer.Character)
-startGunAim()
+    hookVault(LocalPlayer.Character)
+    startGunAim()
 end
 
 task.spawn(function()
-while true do
-task.wait(0.8)
+    while true do
+        task.wait(0.8)
 
-if Auto.Parry then
-for _, p in pairs(Players:GetPlayers()) do
-if p ~= LocalPlayer and p.Character and p.Team and p.Team.Name == "Killer" then
-hookKiller(p.Character)
-end
-end
-end
-end
-
+        if Auto.Parry then
+            for _, p in pairs(Players:GetPlayers()) do
+                if p ~= LocalPlayer and p.Character and p.Team and p.Team.Name == "Killer" then
+                    hookKiller(p.Character)
+                end
+            end
+        end
+    end
 end)
-
-if Moonwalk.ShowButton then
-createMoonwalkButton()
-end
 
 InfoBox:AddLabel("Script: BRUTALSCRIPT")
 InfoBox:AddLabel("Version: 1.0.0")
 InfoBox:AddLabel("Game: Violence District")
 InfoBox:AddLabel("Dev: BRUTALSCRIPT TEAM")
-InfoBox:AddLabel("Join discord for more info")
-InfoBox:AddLabel("Discord:")
-InfoBox:AddButton("Copy Discord Link", function()
-    setclipboard("https://discord.gg/52KS4yCD2")
-    Library:Notify({
-        Title = "Discord link copied!",
-        Duration = 3
-    })
-end)
+InfoBox:AddLabel("Key bound to account")
 
 CreditsBox:AddLabel("Developer:")
 CreditsBox:AddLabel("• BRUTALSCRIPT")
 CreditsBox:AddDivider()
 CreditsBox:AddLabel("Library:")
 CreditsBox:AddLabel("• Obsidian UI")
-CreditsBox:AddDivider()
-CreditsBox:AddLabel("Support the dev:")
-CreditsBox:AddButton("Copy Support Link", function()
-    setclipboard("https://sociabuzz.com/amill_al/tribe")
-    Library:Notify({
-        Title = "Thanks for the support!",
-        Duration = 3
-    })
-end)
 
 local SurvivorESP = ESPBox:AddCheckbox("SurvivorESP", {
     Text = "ESP Survivor",
     Default = false,
-    Callback = function(v)
-        ESP.Survivor = v
-    end
+    Callback = function(v) ESP.Survivor = v end
 })
 
 SurvivorESP:AddColorPicker("SurvivorESPColor", {
     Default = TeamColors.Survivor,
     Title = "Survivor Color",
-
-    Callback = function(color)
-        TeamColors.Survivor = color
-    end
+    Callback = function(color) TeamColors.Survivor = color end
 })
 
 local KillerESP = ESPBox:AddCheckbox("KillerESP", {
     Text = "ESP Killer",
     Default = false,
-    Callback = function(v)
-        ESP.Killer = v
-    end
+    Callback = function(v) ESP.Killer = v end
 })
 
 KillerESP:AddColorPicker("KillerESPColor", {
     Default = TeamColors.Killer,
     Title = "Killer Color",
-
-    Callback = function(color)
-        TeamColors.Killer = color
-    end
+    Callback = function(color) TeamColors.Killer = color end
 })
 
-local ESPGeneratorToggle =
-ESPBox:AddCheckbox("ESPGenerator", {
+local ESPGeneratorToggle = ESPBox:AddCheckbox("ESPGenerator", {
     Text = "Generator",
     Default = false,
-    Callback = function(v)
-        ESP.Generator = v
-    end
+    Callback = function(v) ESP.Generator = v end
 })
 
 ESPGeneratorToggle:AddColorPicker("GeneratorColor", {
     Default = GeneratorColor,
     Title = "Generator Color",
-    Callback = function(v)
-        GeneratorColor = v
-    end
+    Callback = function(v) GeneratorColor = v end
 })
 
-local ESPSCPToggle =
-ESPBox:AddCheckbox("ESPSCP", {
+local ESPSCPToggle = ESPBox:AddCheckbox("ESPSCP", {
     Text = "SCP",
     Default = false,
-    Callback = function(v)
-        ESP.SCP = v
-    end
+    Callback = function(v) ESP.SCP = v end
 })
 
 ESPSCPToggle:AddColorPicker("SCPColor", {
     Default = SCPColor,
     Title = "SCP Color",
-    Callback = function(v)
-        SCPColor = v
-    end
+    Callback = function(v) SCPColor = v end
 })
 
-local ESPPalletToggle =
-ESPBox:AddCheckbox("ESPPallet", {
+local ESPPalletToggle = ESPBox:AddCheckbox("ESPPallet", {
     Text = "Pallet",
     Default = false,
-    Callback = function(v)
-        ESP.Pallet = v
-    end
+    Callback = function(v) ESP.Pallet = v end
 })
 
 ESPPalletToggle:AddColorPicker("PalletColor", {
     Default = PalletColor,
     Title = "Pallet Color",
-    Callback = function(v)
-        PalletColor = v
-    end
+    Callback = function(v) PalletColor = v end
 })
 
-local ESPWindowToggle =
-ESPBox:AddCheckbox("ESPWindow", {
+local ESPWindowToggle = ESPBox:AddCheckbox("ESPWindow", {
     Text = "Window",
     Default = false,
-    Callback = function(v)
-        ESP.Window = v
-    end
+    Callback = function(v) ESP.Window = v end
 })
 
 ESPWindowToggle:AddColorPicker("WindowColor", {
     Default = WindowColor,
     Title = "Window Color",
-    Callback = function(v)
-        WindowColor = v
-    end
+    Callback = function(v) WindowColor = v end
 })
 
 ESPBox:AddSlider("ESPDistance", {
@@ -3360,78 +2947,61 @@ ESPBox:AddSlider("ESPDistance", {
     Min = 10,
     Max = 1000,
     Rounding = 0,
-
-    Callback = function(v)
-        ESP.Distance = v
-    end
+    Callback = function(v) ESP.Distance = v end
 })
 
 ESPStatusBox:AddCheckbox("EnableStatus", {
-Text = "Enable Status ESP",
-Default = false,
-Callback = function(v)
-ESPStatus.Enabled = v
-end
+    Text = "Enable Status ESP",
+    Default = false,
+    Callback = function(v) ESPStatus.Enabled = v end
 })
 
 ESPStatusBox:AddCheckbox("ShowName", {
-Text = "Show Name",
-Default = true,
-Callback = function(v)
-ESPStatus.ShowName = v
-end
+    Text = "Show Name",
+    Default = true,
+    Callback = function(v) ESPStatus.ShowName = v end
 })
 
 ESPStatusBox:AddCheckbox("ShowDistance", {
-Text = "Show Distance",
-Default = true,
-Callback = function(v)
-ESPStatus.ShowDistance = v
-end
+    Text = "Show Distance",
+    Default = true,
+    Callback = function(v) ESPStatus.ShowDistance = v end
 })
 
 ESPStatusBox:AddCheckbox("ShowHealth", {
-Text = "Show Health",
-Default = false,
-Callback = function(v)
-ESPStatus.ShowHealth = v
-end
+    Text = "Show Health",
+    Default = false,
+    Callback = function(v) ESPStatus.ShowHealth = v end
 })
 
 ESPStatusBox:AddSlider("StatusRadius", {
-Text = "Status Radius",
-Default = 100,
-Min = 20,
-Max = 500,
-Rounding = 0,
-Callback = function(v)
-ESPStatus.Radius = v
-end
+    Text = "Status Radius",
+    Default = 100,
+    Min = 20,
+    Max = 500,
+    Rounding = 0,
+    Callback = function(v) ESPStatus.Radius = v end
 })
 
 local CrosshairToggle = CrosshairBox:AddCheckbox("CrosshairEnabled", {
     Text = "Enable Crosshair",
     Default = false,
-    Callback = function(v)
-        Crosshair.Enabled = v
-    end
+    Callback = function(v) Crosshair.Enabled = v end
 })
 
 CrosshairToggle:AddColorPicker("CrosshairColor", {
     Default = Color3.fromRGB(255,255,255),
     Title = "Crosshair Color",
     Transparency = 0,
-    Callback = function(color)
-        Crosshair.Color = color
-    end
+    Callback = function(color) Crosshair.Color = color end
 })
 
 CrosshairBox:AddDropdown("Style", {
-Values = {"Plus","Dot","Circle"},
-Default = 1,
-Multi = false,
-Text = "Style",
-Callback = function(v) Crosshair.Style = v end
+    Values = {"Plus","Dot","Circle"},
+    Default = 1,
+    Multi = false,
+    Text = "Style",
+    Callback = function(v) Crosshair.Style = v end
 })
 
 CrosshairBox:AddSlider("CrosshairPosX", {
@@ -3440,10 +3010,7 @@ CrosshairBox:AddSlider("CrosshairPosX", {
     Min = -100,
     Max = 100,
     Rounding = 0,
-
-    Callback = function(v)
-        Crosshair.OffsetX = v
-    end
+    Callback = function(v) Crosshair.OffsetX = v end
 })
 
 CrosshairBox:AddSlider("CrosshairPosY", {
@@ -3452,10 +3019,7 @@ CrosshairBox:AddSlider("CrosshairPosY", {
     Min = -100,
     Max = 100,
     Rounding = 0,
-
-    Callback = function(v)
-        Crosshair.OffsetY = v
-    end
+    Callback = function(v) Crosshair.OffsetY = v end
 })
 
 AbilityTab:AddCheckbox("Skill", {
@@ -3470,34 +3034,25 @@ AbilityTab:AddCheckbox("Skill", {
 AbilityTab:AddCheckbox("AutoWiggle", {
     Text = "Auto Wiggle",
     Default = false,
-    Callback = function(v)
-        Auto.Wiggle = v
-    end
+    Callback = function(v) Auto.Wiggle = v end
 })
 
 AbilityTab:AddCheckbox("AutoFleeKiller", {
     Text = "Auto Flee Killer",
     Default = false,
-
-    Callback = function(v)
-        AutoFlee.Enabled = v
-    end
+    Callback = function(v) AutoFlee.Enabled = v end
 })
 
 AbilityTab:AddCheckbox("GodMode", {
     Text = "Anti KnockDown",
     Default = false,
-    Callback = function(v)
-        PlayerMods.GodMode = v
-    end
+    Callback = function(v) PlayerMods.GodMode = v end
 })
 
 AbilityTab:AddCheckbox("FastVault", {
     Text = "Fast Vault",
     Default = false,
-    Callback = function(v)
-        FastVault.Enabled = v
-    end
+    Callback = function(v) FastVault.Enabled = v end
 })
 
 AbilityTab:AddSlider("VaultSpeed", {
@@ -3506,9 +3061,7 @@ AbilityTab:AddSlider("VaultSpeed", {
     Min = 1,
     Max = 5,
     Rounding = 1,
-    Callback = function(v)
-        FastVault.Speed = v
-    end
+    Callback = function(v) FastVault.Speed = v end
 })
 
 AbilityTab:AddDivider()
@@ -3518,7 +3071,6 @@ AbilityTab:AddCheckbox("MoonwalkButton", {
     Default = false,
     Callback = function(v)
         Moonwalk.ShowButton = v
-
         if v then
             createMoonwalkButton()
         else
@@ -3541,11 +3093,7 @@ AbilityTab:AddLabel("Moonwalk Keybind"):AddKeyPicker("MoonwalkKey", {
             startMoonwalk()
         else
             if hum then
-                if PlayerMods.Speed then
-                    hum.WalkSpeed = SpeedValue
-                else
-                    hum.WalkSpeed = 16
-                end
+                hum.WalkSpeed = 16
             end
         end
     end
@@ -3557,10 +3105,7 @@ AbilityTab:AddSlider("MoonwalkSpamSpeed", {
     Min = 1,
     Max = 50,
     Rounding = 0,
-
-    Callback = function(Value)
-        Moonwalk.SpamSpeed = Value
-    end
+    Callback = function(Value) Moonwalk.SpamSpeed = Value end
 })
 
 AbilityTab:AddSlider("MoonwalkIntensity", {
@@ -3569,15 +3114,11 @@ AbilityTab:AddSlider("MoonwalkIntensity", {
     Min = 1,
     Max = 50,
     Rounding = 1,
-
-    Callback = function(Value)
-        Moonwalk.Intensity = Value
-    end
+    Callback = function(Value) Moonwalk.Intensity = Value end
 })
 
 AbilityTab:AddButton({
-    Text = "instan escape",
-
+    Text = "instant escape",
     Func = function()
         teleportToFinishLine()
     end
@@ -3601,7 +3142,6 @@ KillerTab:AddCheckbox("AttackAim", {
     Default = false,
     Callback = function(v)
         AttackAim.Enabled = v
-
         if v then
             startAttackAim()
         end
@@ -3611,17 +3151,13 @@ KillerTab:AddCheckbox("AttackAim", {
 KillerTab:AddCheckbox("KillAll", {
     Text = "Auto Kill All",
     Default = false,
-    Callback = function(v)
-        Killer.KillAll = v
-    end
+    Callback = function(v) Killer.KillAll = v end
 })
 
 KillerTab:AddCheckbox("AutoAttack", {
     Text = "Auto Spam Attack",
     Default = false,
-    Callback = function(v)
-        Killer.AutoAttack = v
-    end
+    Callback = function(v) Killer.AutoAttack = v end
 })
 
 KillerTab:AddSlider("AttackDelay", {
@@ -3630,20 +3166,17 @@ KillerTab:AddSlider("AttackDelay", {
     Min = 0.1,
     Max = 1,
     Rounding = 2,
-    Callback = function(v)
-        Killer.AttackDelay = v
-    end
+    Callback = function(v) Killer.AttackDelay = v end
 })
 
 KillerTab:AddDivider()
+
 KillerTab:AddDropdown("MaskedPowerSelect", {
     Text = "Select Power",
     Values = MaskedPowers,
     Default = 1,
     Multi = false,
-    Callback = function(val)
-        Masked.CurrentPower = val
-    end
+    Callback = function(val) Masked.CurrentPower = val end
 })
 
 KillerTab:AddButton("Activate Power", function()
@@ -3654,7 +3187,6 @@ KillerTab:AddButton("Activate Power", function()
 
     if Event then
         Event:FireServer(Masked.CurrentPower)
-    else
     end
 end)
 
@@ -3666,7 +3198,6 @@ KillerTab:AddButton("Deactivate Power", function()
 
     if Event then
         Event:FireServer()
-    else
     end
 end)
 
@@ -3683,10 +3214,8 @@ AutoParryToggle:AddColorPicker("ParryRangeColor", {
     Default = Color3.fromRGB(255, 80, 80),
     Transparency = 0,
     Title = "Parry Range Color",
-
     Callback = function(color)
         ParryRangeVisual.Color = color
-
         if ParryCircle then
             ParryCircle.Color = color
         end
@@ -3698,7 +3227,6 @@ ParryBox:AddCheckbox("ShowParryRange", {
     Default = true,
     Callback = function(Value)
         ParryRangeVisual.Enabled = Value
-
         if not Value and ParryCircle then
             ParryCircle:Destroy()
             ParryCircle = nil
@@ -3712,9 +3240,7 @@ ParryBox:AddSlider("ParryDistance", {
     Min = 5,
     Max = 20,
     Rounding = 0,
-    Callback = function(v)
-        Auto.ParryDistance = v
-    end
+    Callback = function(v) Auto.ParryDistance = v end
 })
 
 ParryBox:AddSlider("FaceSensitivity", {
@@ -3723,58 +3249,36 @@ ParryBox:AddSlider("FaceSensitivity", {
     Min = -1,
     Max = 1,
     Rounding = 2,
-    Callback = function(v)
-        Auto.FaceSensitivity = v
-    end
+    Callback = function(v) Auto.FaceSensitivity = v end
 })
 
 AimlockBox:AddToggle("GunAimEnabled", {
     Text = "Aim Lock",
     Default = false,
-
-    Callback = function(v)
-        GunAim.Enabled = v
-    end
+    Callback = function(v) GunAim.Enabled = v end
 })
 
 AimlockBox:AddDropdown("GunAimTarget", {
-    Values = {
-        "Killer",
-        "Survivor",
-        "SCP"
-    },
-
+    Values = { "Killer", "Survivor", "SCP" },
     Default = 1,
     Text = "Target",
-
-    Callback = function(v)
-        GunAim.TargetMode = v
-    end
+    Callback = function(v) GunAim.TargetMode = v end
 })
 
 AimlockBox:AddDropdown("GunAimPart", {
     Text = "Aim Part",
-    Values = {
-        "Head",
-        "HumanoidRootPart",
-        "Torso"
-    },
+    Values = { "Head", "HumanoidRootPart", "Torso" },
     Default = 2,
-
-    Callback = function(Value)
-        GunAim.AimPart = Value
-    end
+    Callback = function(Value) GunAim.AimPart = Value end
 })
+
 AimlockBox:AddSlider("GunAimFOV", {
     Text = "FOV",
     Default = 250,
     Min = 50,
     Max = 1000,
     Rounding = 0,
-
-    Callback = function(v)
-        GunAim.FOV = v
-    end
+    Callback = function(v) GunAim.FOV = v end
 })
 
 AimlockBox:AddSlider("GunAimPredict", {
@@ -3783,16 +3287,12 @@ AimlockBox:AddSlider("GunAimPredict", {
     Min = 0,
     Max = 1,
     Rounding = 2,
-
-    Callback = function(v)
-        GunAim.PredictStrength = v
-    end
+    Callback = function(v) GunAim.PredictStrength = v end
 })
 
 MovementBox:AddCheckbox("WalkSpeedToggle", {
     Text = "Walk Speed",
     Default = false,
-    Disabled = false,
     Callback = function(v)
         Movement.WalkSpeedEnabled = v
         if v then
@@ -3824,9 +3324,7 @@ MovementBox:AddSlider("WalkSpeedSlider", {
 MovementBox:AddCheckbox("NoClipToggle", {
     Text = "No Clip",
     Default = false,
-    Callback = function(v)
-        toggleNoClip(v)
-    end
+    Callback = function(v) toggleNoClip(v) end
 })
 
 MovementBox:AddCheckbox("JumpPowerToggle", {
@@ -3875,7 +3373,6 @@ EmoteBox:AddDropdown("SelectEmote", {
 
 EmoteBox:AddButton({
     Text = "Play Emote",
-
     Func = function()
         playEmote(Emote.Selected)
     end
@@ -3911,27 +3408,27 @@ FunBox:AddToggle("JerkTool", {
 })
 
 VisualBox:AddCheckbox("Fullbright", {
-Text = "Fullbright",
-Default = false,
-Callback = function(v)
-Visual.Fullbright = v
-applyVisual()
-end
+    Text = "Fullbright",
+    Default = false,
+    Callback = function(v)
+        Visual.Fullbright = v
+        applyVisual()
+    end
 })
 
 VisualBox:AddCheckbox("NoShadow", {
-Text = "No Shadow",
-Default = false,
-Callback = function(v) Visual.NoShadow = v end
+    Text = "No Shadow",
+    Default = false,
+    Callback = function(v) Visual.NoShadow = v end
 })
 
 VisualBox:AddCheckbox("LowGraphics", {
-Text = "Low Graphics",
-Default = false,
-Callback = function(v)
-Visual.LowGraphics = v
-applyOptimization()
-end
+    Text = "Low Graphics",
+    Default = false,
+    Callback = function(v)
+        Visual.LowGraphics = v
+        applyOptimization()
+    end
 })
 
 VisualBox:AddCheckbox("NoScreenEffects", {
@@ -3944,12 +3441,12 @@ VisualBox:AddCheckbox("NoScreenEffects", {
 })
 
 VisualBox:AddCheckbox("CleanSky", {
-Text = "Clean Sky",
-Default = false,
-Callback = function(v)
-Visual.CleanSky = v
-applyOptimization()
-end
+    Text = "Clean Sky",
+    Default = false,
+    Callback = function(v)
+        Visual.CleanSky = v
+        applyOptimization()
+    end
 })
 
 ZoomBox:AddToggle("UnlimitedZoom", {
@@ -3978,7 +3475,6 @@ ZoomBox:AddSlider("MaxZoomDistance", {
 ZoomBox:AddToggle("CustomFOV", {
     Text = "Custom FOV",
     Default = false,
-
     Callback = function(Value)
         CameraZoom.FOVEnabled = Value
         applyCameraFOV()
@@ -3991,10 +3487,8 @@ ZoomBox:AddSlider("CameraFOV", {
     Min = 40,
     Max = 120,
     Rounding = 0,
-
     Callback = function(Value)
         CameraZoom.FOV = Value
-
         if CameraZoom.FOVEnabled then
             applyCameraFOV()
         end
@@ -4028,51 +3522,42 @@ TimeBox:AddSlider("Brightness", {
 })
 
 SettingBox:AddToggle("ShowCustomCursor", {
-	Text = "Custom Cursor",
-	Default = not IS_MOBILE,
-	Callback = function(Value)
-		Library.ShowCustomCursor = Value
-	end,
+    Text = "Custom Cursor",
+    Default = not IS_MOBILE,
+    Callback = function(Value) Library.ShowCustomCursor = Value end
 })
 
 SettingBox:AddDropdown("NotificationSide", {
-	Values = { "Left", "Right" },
-	Default = IS_MOBILE and "Left" or "Right",
-	Text = "Notification Side",
-	Callback = function(Value)
-		Library:SetNotifySide(Value)
-	end,
+    Values = { "Left", "Right" },
+    Default = IS_MOBILE and "Left" or "Right",
+    Text = "Notification Side",
+    Callback = function(Value) Library:SetNotifySide(Value) end
 })
 
 SettingBox:AddDropdown("DPIDropdown", {
-	Values = { "50%", "75%", "85%", "100%", "125%", "150%" },
-	Default = "85%%",
-	Text = "DPI Scale",
-	Callback = function(Value)
-		Value = Value:gsub("%%", "")
-		local DPI = tonumber(Value)
-		Library:SetDPIScale(DPI)
-	end,
+    Values = { "50%", "75%", "85%", "100%", "125%", "150%" },
+    Default = "85%%",
+    Text = "DPI Scale",
+    Callback = function(Value)
+        Value = Value:gsub("%%", "")
+        local DPI = tonumber(Value)
+        Library:SetDPIScale(DPI)
+    end
 })
 
 SettingBox:AddSlider("UICornerSlider", {
-	Text = "Corner Radius",
-	Default = Library.CornerRadius,
-	Min = 0,
-	Max = 20,
-	Rounding = 0,
-	Callback = function(value)
-		Window:SetCornerRadius(value)
-	end
+    Text = "Corner Radius",
+    Default = Library.CornerRadius,
+    Min = 0,
+    Max = 20,
+    Rounding = 0,
+    Callback = function(value) Window:SetCornerRadius(value) end
 })
 
 SettingBox:AddToggle("WatermarkToggle", {
     Text = "Watermark",
     Default = true,
-
-    Callback = function(Value)
-        Watermark.Visible = Value
-    end
+    Callback = function(Value) Watermark.Visible = Value end
 })
 
 SettingBox:AddDivider()
@@ -4086,16 +3571,13 @@ SettingBox:AddButton("Join Discord", function()
 end)
 
 SettingBox:AddButton("Unload script", function()
-	Library:Unload()
+    Library:Unload()
 end)
 
 ThemeManager:SetLibrary(Library)
 SaveManager:SetLibrary(Library)
-
 SaveManager:IgnoreThemeSettings()
 SaveManager:SetIgnoreIndexes({})
-
 ThemeManager:SetFolder("BRUTALSCRIPT")
 SaveManager:SetFolder("BRUTALSCRIPT/configs")
-
 SaveManager:BuildConfigSection(Tabs.UISettings)
