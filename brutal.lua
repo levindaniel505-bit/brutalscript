@@ -268,7 +268,7 @@ until KeyVerified
 -- ================= MAIN SCRIPT =================
 
 local Window = Library:CreateWindow({
-    Title = "",
+    Title = "BRUTALSCRIPT",
     Footer = "BRUTALSCRIPT - Violence District",
     Icon = LOGO_ID,
     IconSize = UDim2.fromOffset(40, 40),
@@ -289,47 +289,130 @@ local RunService = game:GetService("RunService")
 
 local Watermark = Library:AddDraggableLabel("BRUTALSCRIPT")
 
+-- ============== WATERMARK ROUNDING + MENU STYLING ==============
 task.spawn(function()
-    task.wait(0.7)
-    local obsidian = game:GetService("CoreGui"):FindFirstChild("Obsidian")
-    if not obsidian then return end
+    task.wait(1.5)
 
-    for _, obj in ipairs(obsidian:GetDescendants()) do
-        if obj:IsA("TextLabel") and obj.Text:find("BRUTALSCRIPT") then
-            local parent = obj.Parent
-            if parent and not parent:FindFirstChildOfClass("UICorner") then
-                local c = Instance.new("UICorner")
-                c.CornerRadius = UDim.new(0, 8)
-                c.Parent = parent
+    local CoreGui = game:GetService("CoreGui")
+
+    local function findWatermark()
+        for _, gui in ipairs(CoreGui:GetChildren()) do
+            if gui:IsA("ScreenGui") and gui.Name == "Obsidian" then
+                for _, obj in ipairs(gui:GetDescendants()) do
+                    if obj:IsA("TextLabel") and obj.Text:find("BRUTALSCRIPT") then
+                        return obj
+                    end
+                end
+            end
+        end
+        return nil
+    end
+
+    local label
+    for i = 1, 20 do
+        label = findWatermark()
+        if label then break end
+        task.wait(0.3)
+    end
+
+    if label then
+        local parent = label.Parent
+        if parent then
+            for _, old in ipairs(parent:GetChildren()) do
+                if old:IsA("UICorner") then old:Destroy() end
+            end
+            local corner = Instance.new("UICorner")
+            corner.CornerRadius = UDim.new(0, 10)
+            corner.Parent = parent
+
+            if not parent:FindFirstChildOfClass("UIStroke") then
+                local stroke = Instance.new("UIStroke")
+                stroke.Color = Color3.fromRGB(180, 80, 255)
+                stroke.Thickness = 1
+                stroke.ApplyStrokeMode = Enum.ApplyStrokeMode.Border
+                stroke.Parent = parent
+            end
+        end
+    end
+end)
+
+task.spawn(function()
+    task.wait(1.5)
+
+    local CoreGui = game:GetService("CoreGui")
+
+    for _, gui in ipairs(CoreGui:GetChildren()) do
+        if gui:IsA("ScreenGui") and gui.Name == "Obsidian" then
+            for _, obj in ipairs(gui:GetDescendants()) do
+                if obj:IsA("Frame") and (obj.Name == "Main" or obj.Name == "Window") then
+                    local outer = Instance.new("UIStroke")
+                    outer.Color = Color3.fromRGB(255, 255, 255)
+                    outer.Thickness = 2
+                    outer.ApplyStrokeMode = Enum.ApplyStrokeMode.Border
+                    outer.Parent = obj
+
+                    local inner = Instance.new("UIStroke")
+                    inner.Color = Color3.fromRGB(180, 80, 255)
+                    inner.Thickness = 1
+                    inner.ApplyStrokeMode = Enum.ApplyStrokeMode.Border
+                    inner.Transparency = 0.2
+                    inner.Parent = obj
+
+                    local bgImage = Instance.new("ImageLabel")
+                    bgImage.Name = "BrutalLogo"
+                    bgImage.Size = UDim2.fromScale(0.55, 0.55)
+                    bgImage.Position = UDim2.fromScale(0.225, 0.225)
+                    bgImage.BackgroundTransparency = 1
+                    bgImage.Image = LOGO_ID
+                    bgImage.ImageTransparency = 0.82
+                    bgImage.ZIndex = 0
+                    bgImage.Parent = obj
+                    break
+                end
             end
             break
         end
     end
+end)
 
-    for _, obj in ipairs(obsidian:GetDescendants()) do
-        if obj:IsA("Frame") and obj.Name == "Main" then
-            local outer = Instance.new("UIStroke")
-            outer.Color = Color3.fromRGB(255, 255, 255)
-            outer.Thickness = 2
-            outer.ApplyStrokeMode = Enum.ApplyStrokeMode.Border
-            outer.Parent = obj
+task.spawn(function()
+    task.wait(2)
 
-            local inner = Instance.new("UIStroke")
-            inner.Color = Color3.fromRGB(180, 80, 255)
-            inner.Thickness = 1
-            inner.ApplyStrokeMode = Enum.ApplyStrokeMode.Border
-            inner.Transparency = 0.2
-            inner.Parent = obj
+    local CoreGui = game:GetService("CoreGui")
 
-            local bgImage = Instance.new("ImageLabel")
-            bgImage.Name = "BrutalLogo"
-            bgImage.Size = UDim2.fromScale(0.55, 0.55)
-            bgImage.Position = UDim2.fromScale(0.225, 0.225)
-            bgImage.BackgroundTransparency = 1
-            bgImage.Image = LOGO_ID
-            bgImage.ImageTransparency = 0.82
-            bgImage.ZIndex = 0
-            bgImage.Parent = obj
+    for _, gui in ipairs(CoreGui:GetChildren()) do
+        if gui:IsA("ScreenGui") and gui.Name == "Obsidian" then
+
+            for _, obj in ipairs(gui:GetDescendants()) do
+                if (obj:IsA("ImageLabel") or obj:IsA("ImageButton"))
+                and string.lower(obj.Name) == "icon" then
+                    obj.Image = LOGO_ID
+                    obj.ImageColor3 = Color3.fromRGB(255, 255, 255)
+                    obj.ImageTransparency = 0
+                end
+            end
+
+            for _, obj in ipairs(gui:GetDescendants()) do
+                if obj:IsA("Frame")
+                and obj.AbsolutePosition.X < 250
+                and obj.AbsolutePosition.Y < 250
+                and obj.AbsoluteSize.X >= 30
+                and obj.AbsoluteSize.X <= 50
+                and obj.AbsoluteSize.Y >= 30
+                and obj.AbsoluteSize.Y <= 50
+                and not obj:FindFirstChild("BrutalLogoIcon") then
+
+                    local img = Instance.new("ImageLabel")
+                    img.Name = "BrutalLogoIcon"
+                    img.Size = UDim2.fromScale(0.9, 0.9)
+                    img.Position = UDim2.fromScale(0.05, 0.05)
+                    img.BackgroundTransparency = 1
+                    img.Image = LOGO_ID
+                    img.ZIndex = 50
+                    img.Parent = obj
+                end
+            end
+
             break
         end
     end
