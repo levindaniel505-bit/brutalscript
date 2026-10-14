@@ -523,6 +523,7 @@ local MoonwalkButton = nil
 -- ============== ORBIT CAMERA (with WASD) CONFIG ==============
 local Orbit = {
     Enabled = false,
+    BindActive = false,
     Radius = 25,
     Speed = 1.5,
     Height = 3,
@@ -562,12 +563,12 @@ local function getHum()
     return c and c:FindFirstChildOfClass("Humanoid")
 end
 
--- ============== ORBIT CAMERA (with WASD) LOGIC ==============
--- Камера вращается вокруг цели. Игрок жмёт W — персонаж идёт по камере.
--- Визуально: оббегаешь Киллера по кругу, потому что W = вперёд по камере.
+-- ============== ORBIT CAMERA (with WASD + BIND) LOGIC ==============
+-- Камера вращается вокруг цели, когда зажат бинд.
+-- Игрок жмёт W — персонаж идёт по камере → оббегает цель по кругу.
 task.spawn(function()
     while task.wait(0.03) do
-        if not Orbit.Enabled then
+        if not Orbit.Enabled or not Orbit.BindActive then
             Orbit.Target = nil
             continue
         end
@@ -576,7 +577,7 @@ task.spawn(function()
         local cam = workspace.CurrentCamera
         if not myRoot or not cam then continue end
 
-        -- Если цель уже есть — проверяем валидность
+        -- Проверка валидности цели
         if Orbit.Target then
             local tr = Orbit.Target
             if not tr.Parent then
@@ -590,7 +591,7 @@ task.spawn(function()
             end
         end
 
-        -- Ищем новую цель
+        -- Поиск новой цели
         if not Orbit.Target then
             local shortest = Orbit.Radius
             for _, plr in ipairs(Players:GetPlayers()) do
@@ -616,7 +617,6 @@ task.spawn(function()
             local r = flat.Magnitude
             if r < 3 then r = 3 end
 
-            -- Увеличиваем угол каждый кадр
             Orbit.Angle = Orbit.Angle + Orbit.Speed * 0.03
 
             local camPos = center + Vector3.new(
@@ -2256,13 +2256,22 @@ AbilityTab:AddCheckbox("OrbitEnable", {
         if v then
             local myRoot = getRoot()
             if myRoot then
-                local cam = workspace.CurrentCamera
-                Orbit.Angle = math.atan2(myRoot.Position.Z - 0, myRoot.Position.X - 0)
+                Orbit.Angle = math.atan2(myRoot.Position.Z, myRoot.Position.X)
                 Orbit.Target = nil
             end
         end
     end
 })
+
+AbilityTab:AddLabel("Orbit Keybind"):AddKeyPicker("OrbitBind", {
+    Default = "C",
+    Mode = "Hold",
+    Text = "Orbit (hold)",
+    Callback = function(state)
+        Orbit.BindActive = state
+    end
+})
+
 AbilityTab:AddSlider("OrbitRadius", {
     Text = "Orbit Radius",
     Default = 25,
@@ -2631,7 +2640,6 @@ SettingBox:AddButton("Unload script", function() Library:Unload() end)
 
 ThemeManager:SetLibrary(Library)
 SaveManager:SetLibrary(Library)
-SaveManager:IgnoreThemeSettings()
 SaveManager:IgnoreThemeSettings()
 SaveManager:SetIgnoreIndexes({})
 ThemeManager:SetFolder("BRUTALSCRIPT")
