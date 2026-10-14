@@ -69,7 +69,6 @@ local function loadData()
             end
         end
     end
-
     return data
 end
 
@@ -724,6 +723,17 @@ UseSlow = true
 
 local MoonwalkConnection = nil
 local MoonwalkButton = nil
+
+-- ============== AUTO ROTATE 360 CONFIG ==============
+local AutoRotate360 = {
+    Enabled = false,
+    Radius = 20,
+    BehindThreshold = -0.2,
+    Cooldown = 3,
+    RotationSpeed = 1080,
+    LastTrigger = 0,
+    Active = false,
+}
 
 local CameraZoom = {
     UnlimitedZoom = false,
@@ -1447,6 +1457,77 @@ local function AutoWiggle()
         event:FireServer()
     end
 end
+
+-- ============== AUTO ROTATE 360 LOGIC ==============
+task.spawn(function()
+    while task.wait(0.1) do
+        if not AutoRotate360.Enabled then
+            continue
+        end
+
+        if AutoRotate360.Active then
+            continue
+        end
+
+        local now = tick()
+        if now - AutoRotate360.LastTrigger < AutoRotate360.Cooldown then
+            continue
+        end
+
+        local myChar = LocalPlayer.Character
+        local myRoot = myChar and myChar:FindFirstChild("HumanoidRootPart")
+        if not myRoot then
+            continue
+        end
+
+        for _, player in ipairs(Players:GetPlayers()) do
+            if player ~= LocalPlayer
+            and player.Team
+            and player.Team.Name == "Killer"
+            and player.Character then
+
+                local killerRoot = player.Character:FindFirstChild("HumanoidRootPart")
+                if killerRoot then
+                    local distance = (killerRoot.Position - myRoot.Position).Magnitude
+
+                    if distance <= AutoRotate360.Radius then
+                        local directionToKiller = (killerRoot.Position - myRoot.Position).Unit
+                        local dot = myRoot.CFrame.LookVector:Dot(directionToKiller)
+
+                        if dot < AutoRotate360.BehindThreshold then
+                            AutoRotate360.LastTrigger = now
+                            AutoRotate360.Active = true
+
+                            task.spawn(function()
+                                local cam = workspace.CurrentCamera
+                                if not cam then
+                                    AutoRotate360.Active = false
+                                    return
+                                end
+
+                                local startCF = cam.CFrame
+                                local totalRotation = math.rad(360)
+                                local startTime = tick()
+                                local duration = totalRotation / AutoRotate360.RotationSpeed
+
+                                while tick() - startTime < duration do
+                                    local elapsed = tick() - startTime
+                                    local progress = elapsed / duration
+                                    local currentAngle = totalRotation * progress
+
+                                    cam.CFrame = startCF * CFrame.Angles(0, -currentAngle, 0)
+                                    RunService.RenderStepped:Wait()
+                                end
+
+                                AutoRotate360.Active = false
+                            end)
+                        end
+                    end
+                end
+            end
+        end
+    end
+end)
 
 local lastParry = 0
 local PARRY_DEBOUNCE = 0.2
@@ -3121,6 +3202,50 @@ AbilityTab:AddButton({
     Text = "instant escape",
     Func = function()
         teleportToFinishLine()
+    end
+})
+
+-- ============== AUTO ROTATE 360 UI ==============
+AbilityTab:AddDivider()
+
+AbilityTab:AddCheckbox("AutoRotate360", {
+    Text = "Auto Rotate 360 (behind killer)",
+    Default = false,
+    Callback = function(v)
+        AutoRotate360.Enabled = v
+    end
+})
+
+AbilityTab:AddSlider("Rotate360Radius", {
+    Text = "Trigger Radius",
+    Default = 20,
+    Min = 5,
+    Max = 50,
+    Rounding = 0,
+    Callback = function(v)
+        AutoRotate360.Radius = v
+    end
+})
+
+AbilityTab:AddSlider("Rotate360Speed", {
+    Text = "Rotation Speed (deg/s)",
+    Default = 1080,
+    Min = 360,
+    Max = 2160,
+    Rounding = 0,
+    Callback = function(v)
+        AutoRotate360.RotationSpeed = v
+    end
+})
+
+AbilityTab:AddSlider("Rotate360Cooldown", {
+    Text = "Cooldown",
+    Default = 3,
+    Min = 0.5,
+    Max = 10,
+    Rounding = 1,
+    Callback = function(v)
+        AutoRotate360.Cooldown = v
     end
 })
 
