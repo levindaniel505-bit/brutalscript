@@ -15,36 +15,16 @@ local IS_MOBILE = game:GetService("UserInputService").TouchEnabled
 -- ================= KEY SYSTEM =================
 
 local VALID_KEYS = {
-    ["BRUTAL-K7X9M2QF"] = true,
-    ["BRUTAL-P3N8R5VZ"] = true,
-    ["BRUTAL-D6H1T4LY"] = true,
-    ["BRUTAL-W8B2C7JX"] = true,
-    ["BRUTAL-M5F9A3QE"] = true,
-    ["BRUTAL-R2V6Y1KN"] = true,
-    ["BRUTAL-T7G4P8HW"] = true,
-    ["BRUTAL-X9L3D5ZB"] = true,
-    ["BRUTAL-N1Q7M4FK"] = true,
-    ["BRUTAL-Y6J2S9VA"] = true,
-    ["BRUTAL-C4H8W1RN"] = true,
-    ["BRUTAL-Z5K3B7MP"] = true,
-    ["BRUTAL-F9T6D2XL"] = true,
-    ["BRUTAL-V1P4N8QY"] = true,
-    ["BRUTAL-G7R3H5JW"] = true,
-    ["BRUTAL-B8M1K6SZ"] = true,
-    ["BRUTAL-J4X9C2TV"] = true,
-    ["BRUTAL-Q6W7F3LD"] = true,
-    ["BRUTAL-S2Y5P8HN"] = true,
-    ["BRUTAL-L9D4R1KX"] = true,
-    ["BRUTAL-H3V7M6BQ"] = true,
-    ["BRUTAL-E8N2J5WT"] = true,
-    ["BRUTAL-U1C6F9PZ"] = true,
-    ["BRUTAL-A5K8L4YH"] = true,
-    ["BRUTAL-P7Q2D1NX"] = true,
-    ["BRUTAL-IX9W3C6RM"] = true,
-    ["BRUTAL-O4H8V5JT"] = true,
-    ["BRUTAL-K1M7B2QF"] = true,
-    ["BRUTAL-R6T3Z9LD"] = true,
-    ["BRUTAL-W2S5P1KH"] = true,
+    ["BRUTAL-K7X9M2QF"] = true, ["BRUTAL-P3N8R5VZ"] = true, ["BRUTAL-D6H1T4LY"] = true,
+    ["BRUTAL-W8B2C7JX"] = true, ["BRUTAL-M5F9A3QE"] = true, ["BRUTAL-R2V6Y1KN"] = true,
+    ["BRUTAL-T7G4P8HW"] = true, ["BRUTAL-X9L3D5ZB"] = true, ["BRUTAL-N1Q7M4FK"] = true,
+    ["BRUTAL-Y6J2S9VA"] = true, ["BRUTAL-C4H8W1RN"] = true, ["BRUTAL-Z5K3B7MP"] = true,
+    ["BRUTAL-F9T6D2XL"] = true, ["BRUTAL-V1P4N8QY"] = true, ["BRUTAL-G7R3H5JW"] = true,
+    ["BRUTAL-B8M1K6SZ"] = true, ["BRUTAL-J4X9C2TV"] = true, ["BRUTAL-Q6W7F3LD"] = true,
+    ["BRUTAL-S2Y5P8HN"] = true, ["BRUTAL-L9D4R1KX"] = true, ["BRUTAL-H3V7M6BQ"] = true,
+    ["BRUTAL-E8N2J5WT"] = true, ["BRUTAL-U1C6F9PZ"] = true, ["BRUTAL-A5K8L4YH"] = true,
+    ["BRUTAL-P7Q2D1NX"] = true, ["BRUTAL-IX9W3C6RM"] = true, ["BRUTAL-O4H8V5JT"] = true,
+    ["BRUTAL-K1M7B2QF"] = true, ["BRUTAL-R6T3Z9LD"] = true, ["BRUTAL-W2S5P1KH"] = true,
 }
 
 local MAX_ACCOUNTS = 1
@@ -94,9 +74,7 @@ local function checkKeyWithBinding(key, userId)
     for _, id in ipairs(boundIds) do
         if id == userId then return true, "Welcome back!" end
     end
-    if #boundIds >= MAX_ACCOUNTS then
-        return false, "Key already used on another account"
-    end
+    if #boundIds >= MAX_ACCOUNTS then return false, "Key already used on another account" end
     table.insert(boundIds, userId)
     saveData(data)
     return true, "Key activated!"
@@ -237,7 +215,6 @@ local function ShowKeyPrompt()
     box.PlaceholderColor3 = Color3.fromRGB(130, 130, 130)
     box.Font = Enum.Font.Gotham
     box.TextSize = 14
-    box.Text = ""
     box.ClearTextOnFocus = false
     box.Parent = bg
 
@@ -265,7 +242,6 @@ local function ShowKeyPrompt()
     status.Size = UDim2.fromOffset(340, 20)
     status.Position = UDim2.new(0.5, -170, 0.5, 95)
     status.BackgroundTransparency = 1
-    status.Text = ""
     status.TextColor3 = Color3.fromRGB(255, 100, 100)
     status.Font = Enum.Font.Gotham
     status.TextSize = 13
@@ -295,11 +271,8 @@ end
 local loadingGui, barFill, percentLabel, statusLabel = ShowLoadingScreen()
 
 local steps = {
-    { 0.15, "Initializing..." },
-    { 0.35, "Loading libraries..." },
-    { 0.55, "Loading UI..." },
-    { 0.75, "Preparing features..." },
-    { 1.00, "Ready" },
+    { 0.15, "Initializing..." }, { 0.35, "Loading libraries..." },
+    { 0.55, "Loading UI..." }, { 0.75, "Preparing features..." }, { 1.00, "Ready" },
 }
 
 for _, step in ipairs(steps) do
@@ -389,7 +362,6 @@ local RunService = game:GetService("RunService")
 
 local Watermark = Library:AddDraggableLabel("BRUTALSCRIPT")
 
--- Watermark rounding
 task.spawn(function()
     task.wait(1.5)
     local CoreGui = game:GetService("CoreGui")
@@ -432,7 +404,6 @@ task.spawn(function()
     end
 end)
 
--- Main menu styling
 task.spawn(function()
     task.wait(1.5)
     local CoreGui = game:GetService("CoreGui")
@@ -472,9 +443,7 @@ task.spawn(function()
     end
 end)
 
-local FPS = 0
-local Frames = 0
-local LastTick = tick()
+local FPS, Frames, LastTick = 0, 0, tick()
 
 RunService.RenderStepped:Connect(function()
     Frames += 1
@@ -541,28 +510,24 @@ local LastFlee = 0
 local GunAim = { Enabled = false, Holding = false, TargetMode = "Killer", Strength = 1, Predict = true, PredictStrength = 0.12, FOV = 250, VisibilityCheck = true, Target = nil, AimPart = "HumanoidRootPart" }
 local AttackAim = { Enabled = false, Holding = false, Strength = 1, Predict = true, PredictStrength = 0.12, FOV = 250, VisibilityCheck = true, AimPart = "HumanoidRootPart" }
 local Killer = { KillAll = false, AutoAttack = false, AutoCarry = false, KillRange = 500, AttackDelay = 0.45 }
-local KillerBusy = false
-local KillerTarget = nil
-local ParryActive = false
+local KillerBusy, KillerTarget, ParryActive = false, nil, false
 local Masked = { Enabled = false, CurrentPower = "Cobra" }
 local MaskedPowers = {"Cobra", "Richter", "Brandon", "Rabbit", "Alex"}
 
 local Moonwalk = { Enabled = false, ShowButton = false, SpamSpeed = 30, Intensity = 35, SlowSpeed = 20, UseSlow = true }
-local MoonwalkConnection = nil
-local MoonwalkButton = nil
+local MoonwalkConnection, MoonwalkButton = nil, nil
 
--- ============== ROTATE 360 (BIND + DASH ARC) CONFIG ==============
-local Rotate360 = {
+-- ============== ORBIT 360 CONFIG ==============
+-- Орбита: обегаем вокруг Киллера по кругу и возвращаемся
+local Orbit360 = {
     Enabled = false,
-    Radius = 20,
-    BehindThreshold = -0.2,
+    Radius = 20,           -- радиус, в котором ищем цель
+    OrbitTime = 0.4,       -- длительность облёта (сек)
+    OrbitOffset = 0,       -- доп. смещение орбиты от центра цели (0 = точно по позиции цели)
     Cooldown = 3,
-    ArcAngle = 200,
-    Duration = 0.45,
-    SpeedBoost = 20,
-    BindActive = false,
     LastTrigger = 0,
     Active = false,
+    BindActive = false,
 }
 
 local CameraZoom = { UnlimitedZoom = false, MaxDistance = 1000, MinDistance = 0, FOVEnabled = false, FOV = 70, DefaultFOV = workspace.CurrentCamera.FieldOfView }
@@ -597,6 +562,97 @@ local function getHum()
     return c and c:FindFirstChildOfClass("Humanoid")
 end
 
+-- ============== ORBIT 360 FUNCTION ==============
+-- Плавный облёт вокруг цели по кругу на 360° и возврат
+local function performOrbit360(targetRoot)
+    local myRoot = getRoot()
+    if not myRoot or not targetRoot then return end
+
+    local centerPos = targetRoot.Position
+    local startPos = myRoot.Position
+
+    -- Радиус орбиты = текущее расстояние от нас до цели (по горизонтали)
+    local toMe = startPos - centerPos
+    local flatToMe = Vector3.new(toMe.X, 0, toMe.Z)
+    local orbitRadius = flatToMe.Magnitude
+    if orbitRadius < 1 then orbitRadius = 3 end
+
+    -- Стартовый угол = угол от центра к нам
+    local startAngle = math.atan2(flatToMe.Z, flatToMe.X)
+    local totalAngle = math.pi * 2  -- 360°
+    local duration = Orbit360.OrbitTime
+    local startTick = tick()
+
+    Orbit360.Active = true
+
+    while tick() - startTick < duration do
+        if not getRoot() or not targetRoot.Parent then break end
+
+        local progress = (tick() - startTick) / duration
+        local currentAngle = startAngle + totalAngle * progress
+
+        local x = centerPos.X + math.cos(currentAngle) * orbitRadius
+        local z = centerPos.Z + math.sin(currentAngle) * orbitRadius
+        local y = startPos.Y  -- сохраняем высоту
+
+        -- Плавно интерполируем чтобы не было рывков
+        local targetPos = Vector3.new(x, y, z)
+        myRoot.CFrame = myRoot.CFrame:Lerp(CFrame.new(targetPos), 0.6)
+
+        RunService.RenderStepped:Wait()
+    end
+
+    -- Возврат в исходную точку
+    if getRoot() then
+        getRoot().CFrame = CFrame.new(startPos)
+    end
+
+    Orbit360.Active = false
+end
+
+-- ============== ORBIT 360 TRIGGER ==============
+task.spawn(function()
+    while task.wait(0.1) do
+        if not Orbit360.Enabled then continue end
+        if Orbit360.Active then continue end
+
+        local now = tick()
+        if now - Orbit360.LastTrigger < Orbit360.Cooldown then continue end
+
+        local myRoot = getRoot()
+        if not myRoot then continue end
+
+        -- Ищем ближайшего игрока (любой команды) в радиусе
+        local targetRoot = nil
+        local shortest = Orbit360.Radius
+
+        for _, plr in ipairs(Players:GetPlayers()) do
+            if plr ~= LocalPlayer and plr.Character then
+                local hrp = plr.Character:FindFirstChild("HumanoidRootPart")
+                local hum = plr.Character:FindFirstChildOfClass("Humanoid")
+
+                if hrp and hum and hum.Health > 0 then
+                    local dist = (hrp.Position - myRoot.Position).Magnitude
+                    if dist < shortest then
+                        shortest = dist
+                        targetRoot = hrp
+                    end
+                end
+            end
+        end
+
+        if targetRoot then
+            Orbit360.LastTrigger = now
+            task.spawn(function()
+                performOrbit360(targetRoot)
+            end)
+        end
+    end
+end)
+
+local lastParry = 0
+local PARRY_DEBOUNCE = 0.2
+
 local function GetDowned()
     local root = getRoot()
     if not root then return nil end
@@ -607,7 +663,7 @@ local function GetDowned()
             local hrp = p.Character:FindFirstChild("HumanoidRootPart")
             if hum and hrp and hum.Health > 0 and hum.Health <= hum.MaxHealth * 0.25 then
                 local d = (hrp.Position - root.Position).Magnitude
-                if d < dist then dist = d; best = p.Character end
+                if d < dist then dist = d best = p.Character end
             end
         end
     end
@@ -621,10 +677,7 @@ local function GetHook()
     for _, obj in pairs(workspace:GetDescendants()) do
         if obj.Name == "HookPoint" and obj:IsA("BasePart") then
             local dist = (obj.Position - root.Position).Magnitude
-            if dist < shortest and dist < 400 then
-                shortest = dist
-                bestHook = obj
-            end
+            if dist < shortest and dist < 400 then shortest = dist bestHook = obj end
         end
     end
     return bestHook
@@ -665,28 +718,21 @@ local function shouldDisableWalkSpeed()
         or char:GetAttribute("Downed") == true
         or char:GetAttribute("IsDown") == true
         or char:GetAttribute("Knocked") == true
-    ) then
-        return true
-    end
+    ) then return true end
     return false
 end
 
 local WalkSpeedConnection = nil
 
 local function applyWalkSpeed()
-    if WalkSpeedConnection then
-        WalkSpeedConnection:Disconnect()
-        WalkSpeedConnection = nil
-    end
+    if WalkSpeedConnection then WalkSpeedConnection:Disconnect() WalkSpeedConnection = nil end
     WalkSpeedConnection = RunService.Heartbeat:Connect(function()
         if not Movement.WalkSpeedEnabled then return end
-        if Rotate360.Active then return end  -- не трогаем скорость во время облёта
+        if Orbit360.Active then return end
         local hum = getHum()
         if not hum then return end
         if shouldDisableWalkSpeed() then return end
-        if hum.WalkSpeed ~= Movement.WalkSpeedValue then
-            hum.WalkSpeed = Movement.WalkSpeedValue
-        end
+        if hum.WalkSpeed ~= Movement.WalkSpeedValue then hum.WalkSpeed = Movement.WalkSpeedValue end
     end)
 end
 
@@ -702,9 +748,7 @@ local function applyNoClip()
     local char = LocalPlayer.Character
     if not char then return end
     for _, v in pairs(char:GetDescendants()) do
-        if v:IsA("BasePart") and v.CanCollide then
-            v.CanCollide = not Movement.NoClip
-        end
+        if v:IsA("BasePart") and v.CanCollide then v.CanCollide = not Movement.NoClip end
     end
 end
 
@@ -729,23 +773,16 @@ end
 LocalPlayer.CharacterAdded:Connect(function()
     task.wait(0.8)
     applyJumpPower()
-    if Movement.NoClip then
-        task.wait(0.3)
-        toggleNoClip(true)
-    end
+    if Movement.NoClip then task.wait(0.3) toggleNoClip(true) end
 end)
 
 local function applyGodMode()
     if not PlayerMods.GodMode then return end
     local hum = getHum()
     if not hum then return end
-    if hum.Health < hum.MaxHealth then
-        pcall(function() hum.Health = hum.MaxHealth end)
-    end
+    if hum.Health < hum.MaxHealth then pcall(function() hum.Health = hum.MaxHealth end) end
     local state = hum:GetState()
-    if state == Enum.HumanoidStateType.Dead
-    or state == Enum.HumanoidStateType.FallingDown
-    or state == Enum.HumanoidStateType.Ragdoll then
+    if state == Enum.HumanoidStateType.Dead or state == Enum.HumanoidStateType.FallingDown or state == Enum.HumanoidStateType.Ragdoll then
         pcall(function() hum:ChangeState(Enum.HumanoidStateType.Running) end)
     end
 end
@@ -756,28 +793,19 @@ LocalPlayer.CharacterAdded:Connect(function(char)
     if ParryCircle then ParryCircle:Destroy() ParryCircle = nil end
 end)
 
-LocalPlayer.CharacterAdded:Connect(function()
-    task.wait(1)
-    GunAim.Target = nil
-    GunAim.Holding = false
-    applyCameraFOV()
-end)
-
 local ESPObjects = {}
 local CachedSCP = {}
 
 for _, obj in ipairs(workspace:GetDescendants()) do
     if string.find(string.lower(obj.Name), "scp") then CachedSCP[obj] = true end
 end
+
 workspace.DescendantAdded:Connect(function(obj)
     if string.find(string.lower(obj.Name), "scp") then CachedSCP[obj] = true end
 end)
 
 local function removeESP(obj)
-    if ESPObjects[obj] then
-        ESPObjects[obj]:Destroy()
-        ESPObjects[obj] = nil
-    end
+    if ESPObjects[obj] then ESPObjects[obj]:Destroy() ESPObjects[obj] = nil end
 end
 
 workspace.DescendantRemoving:Connect(function(obj)
@@ -876,10 +904,7 @@ local function UpdateGenerator(generator)
         billboard.Parent = generator
     else
         local lbl = billboard:FindFirstChildOfClass("TextLabel")
-        if lbl then
-            lbl.Text = text
-            lbl.TextColor3 = color
-        end
+        if lbl then lbl.Text = text lbl.TextColor3 = color end
     end
     ApplyGenHighlight(generator, color)
 end
@@ -949,24 +974,12 @@ local function createStatusESP(player, char, root)
         StatusESP[char] = billboard
     else
         local label = billboard:FindFirstChildOfClass("TextLabel")
-        if label then
-            label.Text = text
-            local teamColor = Color3.new(1,1,1)
-            if player.Team then
-                if player.Team.Name == "Killer" then teamColor = TeamColors.Killer
-                elseif player.Team.Name == "Survivors" then teamColor = TeamColors.Survivor end
-            end
-            if isDown then teamColor = Color3.fromRGB(255, 0, 0) end
-            label.TextColor3 = teamColor
-        end
+        if label then label.Text = text end
     end
 end
 
 local function UpdateSCPEsp(root)
-    if not ESP.SCP then
-        for obj in pairs(CachedSCP) do removeESP(obj) end
-        return
-    end
+    if not ESP.SCP then for obj in pairs(CachedSCP) do removeESP(obj) end return end
     for obj in pairs(CachedSCP) do
         if obj and obj.Parent then
             local pos
@@ -1023,71 +1036,6 @@ local function AutoWiggle()
     if not event then return end
     for i = 1, Auto.WiggleSpam do event:FireServer() end
 end
-
--- ============== ROTATE 360 (BIND + DASH) LOGIC ==============
-task.spawn(function()
-    while task.wait(0.1) do
-        if not Rotate360.Enabled then continue end
-        if not Rotate360.BindActive then continue end
-        if Rotate360.Active then continue end
-
-        local now = tick()
-        if now - Rotate360.LastTrigger < Rotate360.Cooldown then continue end
-
-        local myChar = LocalPlayer.Character
-        local myRoot = myChar and myChar:FindFirstChild("HumanoidRootPart")
-        if not myRoot then continue end
-
-        for _, player in ipairs(Players:GetPlayers()) do
-            if player ~= LocalPlayer and player.Team and player.Team.Name == "Killer" and player.Character then
-                local killerRoot = player.Character:FindFirstChild("HumanoidRootPart")
-                if killerRoot then
-                    local distance = (killerRoot.Position - myRoot.Position).Magnitude
-                    if distance <= Rotate360.Radius then
-                        local directionToKiller = (killerRoot.Position - myRoot.Position).Unit
-                        local dot = myRoot.CFrame.LookVector:Dot(directionToKiller)
-                        if dot < Rotate360.BehindThreshold then
-                            Rotate360.LastTrigger = now
-                            Rotate360.Active = true
-
-                            task.spawn(function()
-                                local cam = workspace.CurrentCamera
-                                local hum = myChar:FindFirstChildOfClass("Humanoid")
-                                if not cam or not hum then
-                                    Rotate360.Active = false
-                                    return
-                                end
-
-                                local prevSpeed = hum.WalkSpeed
-                                hum.WalkSpeed = Rotate360.SpeedBoost
-
-                                local startCF = cam.CFrame
-                                local totalAngle = math.rad(Rotate360.ArcAngle)
-                                local duration = Rotate360.Duration
-                                local startTime = tick()
-
-                                while tick() - startTime < duration do
-                                    local progress = (tick() - startTime) / duration
-                                    local currentAngle = totalAngle * progress
-                                    cam.CFrame = startCF * CFrame.Angles(0, currentAngle, 0)
-                                    RunService.RenderStepped:Wait()
-                                end
-
-                                hum.WalkSpeed = prevSpeed
-                                Rotate360.Active = false
-                            end)
-
-                            break
-                        end
-                    end
-                end
-            end
-        end
-    end
-end)
-
-local lastParry = 0
-local PARRY_DEBOUNCE = 0.2
 
 local function pressRightClick()
     VirtualInputManager:SendMouseButtonEvent(0, 0, 1, true, game, 0)
@@ -1248,8 +1196,7 @@ local function getClosestGunTarget()
                         local dist = (Vector2.new(pos.X, pos.Y) - center).Magnitude
                         if dist < shortest then
                             if GunAim.VisibilityCheck and not isVisible(hrp) then continue end
-                            shortest = dist
-                            closest = hrp
+                            shortest = dist closest = hrp
                         end
                     end
                 end
@@ -1375,9 +1322,7 @@ local function createMoonwalkButton()
             if not MoonwalkConnection then startMoonwalk() end
         else
             stroke.Color = Color3.fromRGB(255,255,255)
-            if hum then
-                hum.WalkSpeed = Movement.WalkSpeedEnabled and Movement.WalkSpeedValue or 16
-            end
+            if hum then hum.WalkSpeed = Movement.WalkSpeedEnabled and Movement.WalkSpeedValue or 16 end
         end
     end)
 
@@ -1461,10 +1406,7 @@ local function getClosestSurvivorForStalk()
             local hrp = plr.Character:FindFirstChild("HumanoidRootPart")
             if hum and hrp and hum.Health > 30 then
                 local dist = (hrp.Position - root.Position).Magnitude
-                if dist <= AutoStalk.StalkRange and dist < shortest then
-                    shortest = dist
-                    closest = plr
-                end
+                if dist <= AutoStalk.StalkRange and dist < shortest then shortest = dist closest = plr end
             end
         end
     end
@@ -1597,28 +1539,14 @@ local function teleportToFinishLine()
     if not root then return end
     local found
     for _, obj in ipairs(workspace:GetDescendants()) do
-        if string.lower(obj.Name) == "fininshline" and obj:IsA("BasePart") then
-            found = obj
-            break
-        end
+        if string.lower(obj.Name) == "fininshline" and obj:IsA("BasePart") then found = obj break end
     end
     if not found then warn("fininshline not found") return end
     root.CFrame = found.CFrame + Vector3.new(0, 5, 0)
 end
 
-local Visual = {
-    Fullbright = false, NoShadow = false, Ambient = false,
-    AmbientColor = Color3.fromRGB(255,255,255), ClockTimeEnabled = true,
-    Brightness = 2, ClockTime = 14, LowGraphics = false, NoFog = false,
-    CleanSky = false, NoScreenEffects = false
-}
-
-local original = {
-    Brightness = Lighting.Brightness, ClockTime = Lighting.ClockTime,
-    Ambient = Lighting.Ambient, OutdoorAmbient = Lighting.OutdoorAmbient,
-    GlobalShadows = Lighting.GlobalShadows
-}
-
+local Visual = { Fullbright = false, NoShadow = false, Ambient = false, AmbientColor = Color3.fromRGB(255,255,255), ClockTimeEnabled = true, Brightness = 2, ClockTime = 14, LowGraphics = false, NoFog = false, CleanSky = false, NoScreenEffects = false }
+local original = { Brightness = Lighting.Brightness, ClockTime = Lighting.ClockTime, Ambient = Lighting.Ambient, OutdoorAmbient = Lighting.OutdoorAmbient, GlobalShadows = Lighting.GlobalShadows }
 local LastVisualState = { Fullbright = nil, NoShadow = nil, Ambient = nil, AmbientColor = nil, Brightness = nil, ClockTime = nil }
 
 local function applyVisual(force)
@@ -1941,7 +1869,7 @@ RunService.Heartbeat:Connect(function()
                 end
             end
         end
-        if Movement.WalkSpeedEnabled and not Moonwalk.Enabled and not Rotate360.Active then
+        if Movement.WalkSpeedEnabled and not Moonwalk.Enabled and not Orbit360.Active then
             local hum = getHum()
             if hum then
                 if shouldDisableWalkSpeed() then
@@ -1996,9 +1924,7 @@ RunService.RenderStepped:Connect(function()
             local hrp = char:FindFirstChild("HumanoidRootPart")
             local cam = workspace.CurrentCamera
             if humanoid and hrp and cam then
-                if Moonwalk.UseSlow and humanoid.WalkSpeed ~= Moonwalk.SlowSpeed then
-                    humanoid.WalkSpeed = Moonwalk.SlowSpeed
-                end
+                if Moonwalk.UseSlow and humanoid.WalkSpeed ~= Moonwalk.SlowSpeed then humanoid.WalkSpeed = Moonwalk.SlowSpeed end
                 if humanoid.AutoRotate then humanoid.AutoRotate = false end
                 local moveDir = humanoid.MoveDirection
                 local flatMove = Vector3.new(moveDir.X, 0, moveDir.Z)
@@ -2106,7 +2032,6 @@ CreditsBox:AddDivider()
 CreditsBox:AddLabel("Library:")
 CreditsBox:AddLabel("• Obsidian UI")
 
--- ESP
 local SurvivorESP = ESPBox:AddCheckbox("SurvivorESP", { Text = "ESP Survivor", Default = false, Callback = function(v) ESP.Survivor = v end })
 SurvivorESP:AddColorPicker("SurvivorESPColor", { Default = TeamColors.Survivor, Title = "Survivor Color", Callback = function(color) TeamColors.Survivor = color end })
 
@@ -2133,14 +2058,12 @@ ESPStatusBox:AddCheckbox("ShowDistance", { Text = "Show Distance", Default = tru
 ESPStatusBox:AddCheckbox("ShowHealth", { Text = "Show Health", Default = false, Callback = function(v) ESPStatus.ShowHealth = v end })
 ESPStatusBox:AddSlider("StatusRadius", { Text = "Status Radius", Default = 100, Min = 20, Max = 500, Rounding = 0, Callback = function(v) ESPStatus.Radius = v end })
 
--- Crosshair
 local CrosshairToggle = CrosshairBox:AddCheckbox("CrosshairEnabled", { Text = "Enable Crosshair", Default = false, Callback = function(v) Crosshair.Enabled = v end })
 CrosshairToggle:AddColorPicker("CrosshairColor", { Default = Color3.fromRGB(255,255,255), Title = "Crosshair Color", Transparency = 0, Callback = function(color) Crosshair.Color = color end })
 CrosshairBox:AddDropdown("Style", { Values = {"Plus","Dot","Circle"}, Default = 1, Multi = false, Text = "Style", Callback = function(v) Crosshair.Style = v end })
 CrosshairBox:AddSlider("CrosshairPosX", { Text = "Position X", Default = 0, Min = -100, Max = 100, Rounding = 0, Callback = function(v) Crosshair.OffsetX = v end })
 CrosshairBox:AddSlider("CrosshairPosY", { Text = "Position Y", Default = 0, Min = -100, Max = 100, Rounding = 0, Callback = function(v) Crosshair.OffsetY = v end })
 
--- Survivor
 AbilityTab:AddCheckbox("Skill", { Text = "Auto Skill Check", Default = false, Callback = function(v) Auto.SkillCheck = v if v then startSkillCheck() end end })
 AbilityTab:AddCheckbox("AutoWiggle", { Text = "Auto Wiggle", Default = false, Callback = function(v) Auto.Wiggle = v end })
 AbilityTab:AddCheckbox("AutoFleeKiller", { Text = "Auto Flee Killer", Default = false, Callback = function(v) AutoFlee.Enabled = v end })
@@ -2151,96 +2074,63 @@ AbilityTab:AddSlider("VaultSpeed", { Text = "Animation Speed", Default = 1.2, Mi
 AbilityTab:AddDivider()
 
 AbilityTab:AddCheckbox("MoonwalkButton", { Text = "MoonwalkButton", Default = false, Callback = function(v) Moonwalk.ShowButton = v if v then createMoonwalkButton() else removeMoonwalkButton() end end })
-AbilityTab:AddLabel("Moonwalk Keybind"):AddKeyPicker("MoonwalkKey", { Default = "V", Mode = "Toggle", Text = "Moonwalk (pc)", Callback = function(state) Moonwalk.Enabled = state if not state then local hum = getHum() if hum then hum.WalkSpeed = 16 end end end })
+AbilityTab:AddLabel("Moonwalk Keybind"):AddKeyPicker("MoonwalkKey", { Default = "V", Mode = "Toggle", Text = "Moonwalk (pc)", Callback = function(state) Moonwalk.Enabled = state if not state then local hum = getHum() if hum then hum.WalkSpeed = 16 end end end end })
 AbilityTab:AddSlider("MoonwalkSpamSpeed", { Text = "Spam Speed", Default = Moonwalk.SpamSpeed, Min = 1, Max = 50, Rounding = 0, Callback = function(Value) Moonwalk.SpamSpeed = Value end })
 AbilityTab:AddSlider("MoonwalkIntensity", { Text = "Intensity", Default = Moonwalk.Intensity, Min = 1, Max = 50, Rounding = 1, Callback = function(Value) Moonwalk.Intensity = Value end })
 AbilityTab:AddButton({ Text = "instant escape", Func = function() teleportToFinishLine() end })
 
--- ============== ROTATE 360 (BIND + DASH ARC) UI ==============
+-- ============== ORBIT 360 UI ==============
 AbilityTab:AddDivider()
+AbilityTab:AddLabel("── Orbit 360 (around target) ──")
 
-AbilityTab:AddCheckbox("Rotate360Enable", {
-    Text = "Rotate 360 (behind killer)",
+AbilityTab:AddCheckbox("Orbit360Enable", {
+    Text = "Enable Orbit 360",
     Default = false,
     Callback = function(v)
-        Rotate360.Enabled = v
+        Orbit360.Enabled = v
     end
 })
 
-AbilityTab:AddLabel("Rotate 360 Keybind"):AddKeyPicker("Rotate360Key", {
-    Default = "X",
-    Mode = "Hold",
-    Text = "Rotate 360 (hold)",
-    Callback = function(state)
-        Rotate360.BindActive = state
-    end
-})
-
-AbilityTab:AddSlider("Rotate360Radius", {
+AbilityTab:AddSlider("Orbit360Radius", {
     Text = "Trigger Radius",
     Default = 20,
     Min = 5,
     Max = 50,
     Rounding = 0,
     Callback = function(v)
-        Rotate360.Radius = v
+        Orbit360.Radius = v
     end
 })
 
-AbilityTab:AddSlider("Rotate360Angle", {
-    Text = "Arc Angle (deg)",
-    Default = 200,
-    Min = 90,
-    Max = 360,
-    Rounding = 0,
-    Callback = function(v)
-        Rotate360.ArcAngle = v
-    end
-})
-
-AbilityTab:AddSlider("Rotate360Duration", {
-    Text = "Duration (s)",
-    Default = 0.45,
-    Min = 0.2,
+AbilityTab:AddSlider("Orbit360Time", {
+    Text = "Orbit Duration (s)",
+    Default = 0.4,
+    Min = 0.15,
     Max = 2,
     Rounding = 2,
     Callback = function(v)
-        Rotate360.Duration = v
+        Orbit360.OrbitTime = v
     end
 })
 
-AbilityTab:AddSlider("Rotate360Speed", {
-    Text = "WalkSpeed boost",
-    Default = 20,
-    Min = 16,
-    Max = 40,
-    Rounding = 0,
-    Callback = function(v)
-        Rotate360.SpeedBoost = v
-    end
-})
-
-AbilityTab:AddSlider("Rotate360Cooldown", {
+AbilityTab:AddSlider("Orbit360Cooldown", {
     Text = "Cooldown",
     Default = 3,
     Min = 0.5,
     Max = 10,
     Rounding = 1,
     Callback = function(v)
-        Rotate360.Cooldown = v
+        Orbit360.Cooldown = v
     end
 })
 
--- Killer
 KillerTab:AddCheckbox("AutoStalk", { Text = "Auto Stalk", Default = false, Callback = function(v) AutoStalk.Enabled = v if v then startAutoStalk() else stopAutoStalk() end end })
 KillerTab:AddCheckbox("AttackAim", { Text = "AimLock Attack", Default = false, Callback = function(v) AttackAim.Enabled = v if v then startAttackAim() end end })
 KillerTab:AddCheckbox("KillAll", { Text = "Auto Kill All", Default = false, Callback = function(v) Killer.KillAll = v end })
 KillerTab:AddCheckbox("AutoAttack", { Text = "Auto Spam Attack", Default = false, Callback = function(v) Killer.AutoAttack = v end })
 KillerTab:AddSlider("AttackDelay", { Text = "Attack Delay", Default = 0.45, Min = 0.1, Max = 1, Rounding = 2, Callback = function(v) Killer.AttackDelay = v end })
-
 KillerTab:AddDivider()
 KillerTab:AddDropdown("MaskedPowerSelect", { Text = "Select Power", Values = MaskedPowers, Default = 1, Multi = false, Callback = function(val) Masked.CurrentPower = val end })
-
 KillerTab:AddButton("Activate Power", function()
     local Event = ReplicatedStorage:FindFirstChild("Remotes", true)
         and ReplicatedStorage.Remotes:FindFirstChild("Killers", true)
@@ -2248,7 +2138,6 @@ KillerTab:AddButton("Activate Power", function()
         and ReplicatedStorage.Remotes.Killers.Masked:FindFirstChild("Activatepower")
     if Event then Event:FireServer(Masked.CurrentPower) end
 end)
-
 KillerTab:AddButton("Deactivate Power", function()
     local Event = ReplicatedStorage:FindFirstChild("Remotes", true)
         and ReplicatedStorage.Remotes:FindFirstChild("Killers", true)
@@ -2257,36 +2146,30 @@ KillerTab:AddButton("Deactivate Power", function()
     if Event then Event:FireServer() end
 end)
 
--- Parry
 local AutoParryToggle = ParryBox:AddCheckbox("AutoParry", { Text = "Auto Parry", Default = false, Callback = function(v) Auto.Parry = v ParryRangeVisual.Enabled = v end })
 AutoParryToggle:AddColorPicker("ParryRangeColor", { Default = Color3.fromRGB(255, 80, 80), Transparency = 0, Title = "Parry Range Color", Callback = function(color) ParryRangeVisual.Color = color if ParryCircle then ParryCircle.Color = color end end })
 ParryBox:AddCheckbox("ShowParryRange", { Text = "Show Parry Range", Default = true, Callback = function(Value) ParryRangeVisual.Enabled = Value if not Value and ParryCircle then ParryCircle:Destroy() ParryCircle = nil end end })
 ParryBox:AddSlider("ParryDistance", { Text = "Distance", Default = 15, Min = 5, Max = 20, Rounding = 0, Callback = function(v) Auto.ParryDistance = v end })
 ParryBox:AddSlider("FaceSensitivity", { Text = "Face Sensitivity Killer", Default = 0.7, Min = -1, Max = 1, Rounding = 2, Callback = function(v) Auto.FaceSensitivity = v end })
 
--- Aimlock
 AimlockBox:AddToggle("GunAimEnabled", { Text = "Aim Lock", Default = false, Callback = function(v) GunAim.Enabled = v end })
 AimlockBox:AddDropdown("GunAimTarget", { Values = { "Killer", "Survivor", "SCP" }, Default = 1, Text = "Target", Callback = function(v) GunAim.TargetMode = v end })
 AimlockBox:AddDropdown("GunAimPart", { Text = "Aim Part", Values = { "Head", "HumanoidRootPart", "Torso" }, Default = 2, Callback = function(Value) GunAim.AimPart = Value end })
 AimlockBox:AddSlider("GunAimFOV", { Text = "FOV", Default = 250, Min = 50, Max = 1000, Rounding = 0, Callback = function(v) GunAim.FOV = v end })
 AimlockBox:AddSlider("GunAimPredict", { Text = "Prediction", Default = 0.12, Min = 0, Max = 1, Rounding = 2, Callback = function(v) GunAim.PredictStrength = v end })
 
--- Movement
 MovementBox:AddCheckbox("WalkSpeedToggle", { Text = "Walk Speed", Default = false, Callback = function(v) Movement.WalkSpeedEnabled = v if v then applyWalkSpeed() else local hum = getHum() if hum then hum.WalkSpeed = Movement.OriginalWalkSpeed end end end })
 MovementBox:AddSlider("WalkSpeedSlider", { Text = "Walk Speed Value", Default = 17.6, Min = 16, Max = 32, Rounding = 1, Callback = function(v) Movement.WalkSpeedValue = v if Movement.WalkSpeedEnabled then applyWalkSpeed() end end })
 MovementBox:AddCheckbox("NoClipToggle", { Text = "No Clip", Default = false, Callback = function(v) toggleNoClip(v) end })
 MovementBox:AddCheckbox("JumpPowerToggle", { Text = "Custom Jump Power", Default = false, Callback = function(v) Movement.JumpPowerEnabled = v if v then applyJumpPower() else local hum = getHum() if hum then hum.JumpPower = Movement.OriginalJumpPower end end end })
 MovementBox:AddSlider("JumpPowerSlider", { Text = "Jump Power Value", Default = 50, Min = 0, Max = 300, Rounding = 0, Callback = function(v) Movement.JumpPowerValue = v if Movement.JumpPowerEnabled then applyJumpPower() end end })
 
--- Emote
 EmoteBox:AddDropdown("SelectEmote", { Values = EmoteList, Default = 1, Multi = false, Text = "Select Emote", Callback = function(v) Emote.Selected = v if EmoteButton.LabelRef then EmoteButton.LabelRef.Text = v end end })
 EmoteBox:AddButton({ Text = "Play Emote", Func = function() playEmote(Emote.Selected) end })
 EmoteBox:AddToggle("ShowEmoteButton", { Text = "Show Emote Button", Default = false, Callback = function(v) EmoteButton.Show = v if v then createEmoteButton() else removeEmoteButton() end end })
 
--- Fun
 FunBox:AddToggle("JerkTool", { Text = "Jerk Tool", Default = false, Callback = function(v) JerkTool.Enabled = v if v then createJerkTool() else if currentJerkTool then currentJerkTool:Destroy() currentJerkTool = nil end end end })
 
--- Visual
 VisualBox:AddCheckbox("Fullbright", { Text = "Fullbright", Default = false, Callback = function(v) Visual.Fullbright = v applyVisual() end })
 VisualBox:AddCheckbox("NoShadow", { Text = "No Shadow", Default = false, Callback = function(v) Visual.NoShadow = v end })
 VisualBox:AddCheckbox("LowGraphics", { Text = "Low Graphics", Default = false, Callback = function(v) Visual.LowGraphics = v applyOptimization() end })
@@ -2301,7 +2184,6 @@ ZoomBox:AddSlider("CameraFOV", { Text = "Camera FOV", Default = 70, Min = 40, Ma
 TimeBox:AddSlider("ClockTime", { Text = "Clock Time", Default = 14, Min = 0, Max = 24, Rounding = 0, Callback = function(v) Visual.ClockTime = v Visual.Ambient = true applyVisual() end })
 TimeBox:AddSlider("Brightness", { Text = "Brightness", Default = 2, Min = 0, Max = 5, Rounding = 1, Callback = function(v) Visual.Brightness = v Visual.Ambient = true applyVisual() end })
 
--- UI Settings
 SettingBox:AddToggle("ShowCustomCursor", { Text = "Custom Cursor", Default = not IS_MOBILE, Callback = function(Value) Library.ShowCustomCursor = Value end })
 SettingBox:AddDropdown("NotificationSide", { Values = { "Left", "Right" }, Default = IS_MOBILE and "Left" or "Right", Text = "Notification Side", Callback = function(Value) Library:SetNotifySide(Value) end })
 SettingBox:AddDropdown("DPIDropdown", { Values = { "50%", "75%", "85%", "100%", "125%", "150%" }, Default = "85%%", Text = "DPI Scale", Callback = function(Value) Value = Value:gsub("%%", "") local DPI = tonumber(Value) Library:SetDPIScale(DPI) end })
