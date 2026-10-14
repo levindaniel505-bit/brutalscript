@@ -524,12 +524,14 @@ local MoonwalkButton = nil
 local Evade = {
     Enabled = false,
     Radius = 15,
+    SafeDistance = 10,
     Duration = 0.8,
     Cooldown = 2,
-    Direction = -1,      -- -1 = вправо, 1 = влево
+    Direction = -1,
     Angle = 160,
     Active = false,
     LastTrigger = 0,
+    RequireApproach = true,
 }
 
 local CameraZoom = { UnlimitedZoom = false, MaxDistance = 1000, MinDistance = 0, FOVEnabled = false, FOV = 70, DefaultFOV = workspace.CurrentCamera.FieldOfView }
@@ -575,8 +577,9 @@ local function performEvade(killerRoot)
 
     local toMe = startPos - center
     local flat = Vector3.new(toMe.X, 0, toMe.Z)
-    local r = flat.Magnitude
-    if r < 2 then r = 4 end
+    local currentR = flat.Magnitude
+    -- Если расстояние до Киллера меньше SafeDistance — берём SafeDistance
+    local r = math.max(currentR, Evade.SafeDistance)
 
     local startAngle = math.atan2(flat.Z, flat.X)
     local totalAngle = math.rad(Evade.Angle) * Evade.Direction
@@ -598,7 +601,6 @@ local function performEvade(killerRoot)
             center.Z + math.sin(angle) * r
         )
 
-        -- Humanoid:Move принимает направление — Roblox сам двигает с анимацией ходьбы
         local direction = targetPos - myRoot.Position
         direction = Vector3.new(direction.X, 0, direction.Z)
         if direction.Magnitude > 0.1 then
@@ -618,7 +620,8 @@ task.spawn(function()
         if tick() - Evade.LastTrigger < Evade.Cooldown then continue end
 
         local myRoot = getRoot()
-        if not myRoot then continue end
+        local myHum = getHum()
+        if not myRoot or not myHum then continue end
 
         local target = nil
         local shortest = Evade.Radius
@@ -628,14 +631,32 @@ task.spawn(function()
                 local h = plr.Character:FindFirstChildOfClass("Humanoid")
                 if hrp and h and h.Health > 0 then
                     local d = (hrp.Position - myRoot.Position).Magnitude
-                    if d < shortest and d > 2 then
+                    -- Отсекаем слишком близких — обходить их уже поздно
+                    if d < shortest and d > 4 then
                         local dirTo = (hrp.Position - myRoot.Position).Unit
                         local flatDir = Vector3.new(dirTo.X, 0, dirTo.Z).Unit
                         local flatLook = Vector3.new(myRoot.CFrame.LookVector.X, 0, myRoot.CFrame.LookVector.Z).Unit
                         local dot = flatLook:Dot(flatDir)
+
+                        -- Киллер сзади
                         if dot < -0.1 then
-                            shortest = d
-                            target = hrp
+                            -- Проверяем что Киллер приближается (его скорость направлена на нас)
+                            local killerVel = hrp.AssemblyLinearVelocity
+                            local flatVel = Vector3.new(killerVel.X, 0, killerVel.Z)
+                            local approaching = true
+                            if Evade.RequireApproach and flatVel.Magnitude > 2 then
+                                local toMe = (myRoot.Position - hrp.Position)
+                                local flatToMe = Vector3.new(toMe.X, 0, toMe.Z).Unit
+                                local velDot = flatVel.Unit:Dot(flatToMe)
+                                if velDot < 0.3 then
+                                    approaching = false
+                                end
+                            end
+
+                            if approaching then
+                                shortest = d
+                                target = hrp
+                            end
                         end
                     end
                 end
@@ -2266,6 +2287,19 @@ AbilityTab:AddButton({
 
 AbilityTab:AddDivider()
 
+AbilityTab:AddLabel("Side Step Evade Keybind"):AddKeyPicker("EvadeBind", {
+    Default = "Z",
+    Mode = "Toggle",
+    Text = "Side Step (toggle)",
+    Callback = function(state)
+        Evade.Enabled = state
+        Library:Notify({
+            Title = state and "Evade ON" or "Evade OFF",
+            Duration = 2
+        })
+    end
+})
+
 AbilityTab:AddCheckbox("EvadeEnable", {
     Text = "Side Step Evade (behind killer)",
     Default = false,
@@ -2279,6 +2313,15 @@ AbilityTab:AddSlider("EvadeRadius", {
     Max = 40,
     Rounding = 0,
     Callback = function(v) Evade.Radius = v end
+})
+
+AbilityTab:AddSlider("EvadeSafeDist", {
+    Text = "Safe Distance",
+    Default = 10,
+    Min = 4,
+    Max = 30,
+    Rounding = 1,
+    Callback = function(v) Evade.SafeDistance = v end
 })
 
 AbilityTab:AddSlider("EvadeDuration", {
@@ -2307,6 +2350,12 @@ AbilityTab:AddDropdown("EvadeDirection", {
     Callback = function(v)
         Evade.Direction = (v == "Right") and -1 or 1
     end
+})
+
+AbilityTab:AddToggle("EvadeApproach", {
+    Text = "Only when killer approaches",
+    Default = true,
+    Callback = function(v) Evade.RequireApproach = v end
 })
 
 AbilityTab:AddSlider("EvadeCooldown", {
