@@ -371,6 +371,15 @@ local Camera = workspace.CurrentCamera
 
 local Watermark = Library:AddDraggableLabel("BRUTALSCRIPT")
 
+-- ============== NOTIFY HELPER ==============
+local function Notify(title, on)
+    Library:Notify({
+        Title = title,
+        Description = on and "Enabled" or "Disabled",
+        Duration = 2,
+    })
+end
+
 task.spawn(function()
     task.wait(1.5)
     local CoreGui = game:GetService("CoreGui")
@@ -532,13 +541,13 @@ local Evade = {
     Active = false,
     LastTrigger = 0,
     RequireApproach = true,
-    -- НОВОЕ:
     Mode = "Behind",        -- "Behind" (за спину) или "Arc" (старое поведение)
     BehindDistance = 3,     -- на сколько студов встать за спиной киллера
     OffsetSide = 0,         -- смещение вбок от спины (студа)
     Teleport = true,        -- true = мгновенный CFrame, false = плавный lerp
     LookAtKiller = true,    -- смотреть на киллера после мува
     UseRaycast = true,      -- проверять, что точка за спиной не в стене
+    DodgeAttack = true,     -- уклоняться в сторону, противоположную удару
 }
 
 local CameraZoom = { UnlimitedZoom = false, MaxDistance = 1000, MinDistance = 0, FOVEnabled = false, FOV = 70, DefaultFOV = workspace.CurrentCamera.FieldOfView }
@@ -583,12 +592,48 @@ local function isPointFree(pos)
     params.FilterDescendantsInstances = { LocalPlayer.Character }
     local origin = pos + Vector3.new(0, 3, 0)
     local result = workspace:Raycast(origin, Vector3.new(0, -6, 0), params)
-    -- Если под точкой есть пол и нет препятствия — ок
     return result ~= nil
 end
 
--- Получить финальную точку "за спиной киллера"
-local function getBehindPoint(killerRoot)
+-- Определяем сторону удара киллера.
+-- Возвращает 1 (удар слева от нас -> уходим вправо) или -1 (удар справа -> уходим влево)
+local function detectAttackSide(killerRoot)
+    local myRoot = getRoot()
+    if not myRoot or not killerRoot then return nil end
+
+    local toKiller = killerRoot.Position - myRoot.Position
+    local flatToKiller = Vector3.new(toKiller.X, 0, toKiller.Z)
+    if flatToKiller.Magnitude < 0.01 then return nil end
+    flatToKiller = flatToKiller.Unit
+
+    -- Правый вектор относительно нас (смотрим на киллера)
+    local myRight = Vector3.new(flatToKiller.Z, 0, -flatToKiller.X)
+
+    local killerVel = killerRoot.AssemblyLinearVelocity
+    local flatVel = Vector3.new(killerVel.X, 0, killerVel.Z)
+
+    local lateral
+    if flatVel.Magnitude > 2 then
+        lateral = myRight:Dot(flatVel.Unit)
+    else
+        local killerLook = killerRoot.CFrame.LookVector
+        local flatLook = Vector3.new(killerLook.X, 0, killerLook.Z)
+        if flatLook.Magnitude < 0.01 then return nil end
+        lateral = myRight:Dot(flatLook.Unit)
+    end
+
+    -- lateral > 0 => киллер справа/смотрит вправо => удар справа => уходим влево (-1)
+    -- lateral < 0 => удар слева => уходим вправо (+1)
+    if lateral > 0.05 then
+        return -1
+    elseif lateral < -0.05 then
+        return 1
+    end
+    return nil
+end
+
+-- Получить финальную точку "за спиной киллера" со смещением в сторону
+local function getBehindPoint(killerRoot, sideOverride)
     local myRoot = getRoot()
     if not myRoot or not killerRoot then return nil end
 
@@ -602,13 +647,14 @@ local function getBehindPoint(killerRoot)
 
     local flatRight = Vector3.new(-flatLook.Z, 0, flatLook.X)
 
+    local sideOffset = sideOverride or Evade.OffsetSide
+
     local basePos = killerRoot.Position
         - flatLook * Evade.BehindDistance
-        + flatRight * Evade.OffsetSide
+        + flatRight * sideOffset
 
     local targetPos = Vector3.new(basePos.X, myRoot.Position.Y, basePos.Z)
 
-    -- Если точка в стене — попробуем сдвинуться ближе к киллеру
     if not isPointFree(targetPos) then
         local fallback = killerRoot.Position - flatLook * (Evade.BehindDistance * 0.5)
         targetPos = Vector3.new(fallback.X, myRoot.Position.Y, fallback.Z)
@@ -618,19 +664,18 @@ local function getBehindPoint(killerRoot)
     return targetPos
 end
 
--- Мгновенный выход за спину
-local function performEvadeBehind(killerRoot)
+-- Выход за спину с уклоном в сторону, противоположную удару
+local function performEvadeBehind(killerRoot, sideOverride)
     local myRoot = getRoot()
     local hum = getHum()
     if not myRoot or not hum or not killerRoot then return end
 
-    local targetPos = getBehindPoint(killerRoot)
+    local targetPos = getBehindPoint(killerRoot, sideOverride)
     if not targetPos then return end
 
     Evade.Active = true
 
     if Evade.Teleport then
-        -- Мгновенно
         myRoot.CFrame = CFrame.new(targetPos, targetPos + killerRoot.CFrame.LookVector)
         if Evade.LookAtKiller then
             local look = killerRoot.Position - targetPos
@@ -640,7 +685,6 @@ local function performEvadeBehind(killerRoot)
             end
         end
     else
-        -- Плавный lerp
         local startPos = myRoot.Position
         local startTick = tick()
         while tick() - startTick < Evade.Duration do
@@ -663,7 +707,7 @@ local function performEvadeBehind(killerRoot)
     Evade.Active = false
 end
 
--- Старое поведение (дуга) — оставляем на случай, если Mode = "Arc"
+-- Старое поведение (дуга)
 local function performEvadeArc(killerRoot)
     local myRoot = getRoot()
     local hum = getHum()
@@ -706,10 +750,9 @@ local function performEvadeArc(killerRoot)
     Evade.Active = false
 end
 
--- Единая точка входа
-local function performEvade(killerRoot)
+local function performEvade(killerRoot, sideOverride)
     if Evade.Mode == "Behind" then
-        performEvadeBehind(killerRoot)
+        performEvadeBehind(killerRoot, sideOverride)
     else
         performEvadeArc(killerRoot)
     end
@@ -726,22 +769,21 @@ task.spawn(function()
 
         local target = nil
         local shortest = Evade.Radius
+        local attackSide = nil
+
         for _, plr in ipairs(Players:GetPlayers()) do
             if plr ~= LocalPlayer and plr.Team and plr.Team.Name == "Killer" and plr.Character then
                 local hrp = plr.Character:FindFirstChild("HumanoidRootPart")
                 local h = plr.Character:FindFirstChildOfClass("Humanoid")
                 if hrp and h and h.Health > 0 then
                     local d = (hrp.Position - myRoot.Position).Magnitude
-                    -- Отсекаем слишком близких — обходить их уже поздно
                     if d < shortest and d > 4 then
                         local dirTo = (hrp.Position - myRoot.Position).Unit
                         local flatDir = Vector3.new(dirTo.X, 0, dirTo.Z).Unit
                         local flatLook = Vector3.new(myRoot.CFrame.LookVector.X, 0, myRoot.CFrame.LookVector.Z).Unit
                         local dot = flatLook:Dot(flatDir)
 
-                        -- Киллер сзади
                         if dot < -0.1 then
-                            -- Проверяем что Киллер приближается (его скорость направлена на нас)
                             local killerVel = hrp.AssemblyLinearVelocity
                             local flatVel = Vector3.new(killerVel.X, 0, killerVel.Z)
                             local approaching = true
@@ -757,6 +799,9 @@ task.spawn(function()
                             if approaching then
                                 shortest = d
                                 target = hrp
+                                if Evade.DodgeAttack then
+                                    attackSide = detectAttackSide(hrp)
+                                end
                             end
                         end
                     end
@@ -766,7 +811,7 @@ task.spawn(function()
 
         if target then
             Evade.LastTrigger = tick()
-            task.spawn(function() performEvade(target) end)
+            task.spawn(function() performEvade(target, attackSide) end)
         end
     end
 end)
@@ -2168,7 +2213,10 @@ CreditsBox:AddLabel("• Obsidian UI")
 local SurvivorESP = ESPBox:AddCheckbox("SurvivorESP", {
     Text = "ESP Survivor",
     Default = false,
-    Callback = function(v) ESP.Survivor = v end
+    Callback = function(v)
+        ESP.Survivor = v
+        Notify("ESP Survivor", v)
+    end
 })
 SurvivorESP:AddColorPicker("SurvivorESPColor", {
     Default = TeamColors.Survivor,
@@ -2179,7 +2227,10 @@ SurvivorESP:AddColorPicker("SurvivorESPColor", {
 local KillerESP = ESPBox:AddCheckbox("KillerESP", {
     Text = "ESP Killer",
     Default = false,
-    Callback = function(v) ESP.Killer = v end
+    Callback = function(v)
+        ESP.Killer = v
+        Notify("ESP Killer", v)
+    end
 })
 KillerESP:AddColorPicker("KillerESPColor", {
     Default = TeamColors.Killer,
@@ -2190,7 +2241,10 @@ KillerESP:AddColorPicker("KillerESPColor", {
 local ESPGeneratorToggle = ESPBox:AddCheckbox("ESPGenerator", {
     Text = "Generator",
     Default = false,
-    Callback = function(v) ESP.Generator = v end
+    Callback = function(v)
+        ESP.Generator = v
+        Notify("ESP Generator", v)
+    end
 })
 ESPGeneratorToggle:AddColorPicker("GeneratorColor", {
     Default = GeneratorColor,
@@ -2201,7 +2255,10 @@ ESPGeneratorToggle:AddColorPicker("GeneratorColor", {
 local ESPSCPToggle = ESPBox:AddCheckbox("ESPSCP", {
     Text = "SCP",
     Default = false,
-    Callback = function(v) ESP.SCP = v end
+    Callback = function(v)
+        ESP.SCP = v
+        Notify("ESP SCP", v)
+    end
 })
 ESPSCPToggle:AddColorPicker("SCPColor", {
     Default = SCPColor,
@@ -2212,7 +2269,10 @@ ESPSCPToggle:AddColorPicker("SCPColor", {
 local ESPPalletToggle = ESPBox:AddCheckbox("ESPPallet", {
     Text = "Pallet",
     Default = false,
-    Callback = function(v) ESP.Pallet = v end
+    Callback = function(v)
+        ESP.Pallet = v
+        Notify("ESP Pallet", v)
+    end
 })
 ESPPalletToggle:AddColorPicker("PalletColor", {
     Default = PalletColor,
@@ -2223,7 +2283,10 @@ ESPPalletToggle:AddColorPicker("PalletColor", {
 local ESPWindowToggle = ESPBox:AddCheckbox("ESPWindow", {
     Text = "Window",
     Default = false,
-    Callback = function(v) ESP.Window = v end
+    Callback = function(v)
+        ESP.Window = v
+        Notify("ESP Window", v)
+    end
 })
 ESPWindowToggle:AddColorPicker("WindowColor", {
     Default = WindowColor,
@@ -2243,22 +2306,25 @@ ESPBox:AddSlider("ESPDistance", {
 ESPStatusBox:AddCheckbox("EnableStatus", {
     Text = "Enable Status ESP",
     Default = false,
-    Callback = function(v) ESPStatus.Enabled = v end
+    Callback = function(v)
+        ESPStatus.Enabled = v
+        Notify("Status ESP", v)
+    end
 })
 ESPStatusBox:AddCheckbox("ShowName", {
     Text = "Show Name",
     Default = true,
-    Callback = function(v) ESPStatus.ShowName = v end
+    Callback = function(v) ESPStatus.ShowName = v Notify("Show Name", v) end
 })
 ESPStatusBox:AddCheckbox("ShowDistance", {
     Text = "Show Distance",
     Default = true,
-    Callback = function(v) ESPStatus.ShowDistance = v end
+    Callback = function(v) ESPStatus.ShowDistance = v Notify("Show Distance", v) end
 })
 ESPStatusBox:AddCheckbox("ShowHealth", {
     Text = "Show Health",
     Default = false,
-    Callback = function(v) ESPStatus.ShowHealth = v end
+    Callback = function(v) ESPStatus.ShowHealth = v Notify("Show Health", v) end
 })
 ESPStatusBox:AddSlider("StatusRadius", {
     Text = "Status Radius",
@@ -2272,7 +2338,10 @@ ESPStatusBox:AddSlider("StatusRadius", {
 local CrosshairToggle = CrosshairBox:AddCheckbox("CrosshairEnabled", {
     Text = "Enable Crosshair",
     Default = false,
-    Callback = function(v) Crosshair.Enabled = v end
+    Callback = function(v)
+        Crosshair.Enabled = v
+        Notify("Crosshair", v)
+    end
 })
 CrosshairToggle:AddColorPicker("CrosshairColor", {
     Default = Color3.fromRGB(255,255,255),
@@ -2310,27 +2379,28 @@ AbilityTab:AddCheckbox("Skill", {
     Callback = function(v)
         Auto.SkillCheck = v
         if v then startSkillCheck() end
+        Notify("Auto Skill Check", v)
     end
 })
 AbilityTab:AddCheckbox("AutoWiggle", {
     Text = "Auto Wiggle",
     Default = false,
-    Callback = function(v) Auto.Wiggle = v end
+    Callback = function(v) Auto.Wiggle = v Notify("Auto Wiggle", v) end
 })
 AbilityTab:AddCheckbox("AutoFleeKiller", {
     Text = "Auto Flee Killer",
     Default = false,
-    Callback = function(v) AutoFlee.Enabled = v end
+    Callback = function(v) AutoFlee.Enabled = v Notify("Auto Flee Killer", v) end
 })
 AbilityTab:AddCheckbox("GodMode", {
     Text = "Anti KnockDown",
     Default = false,
-    Callback = function(v) PlayerMods.GodMode = v end
+    Callback = function(v) PlayerMods.GodMode = v Notify("Anti KnockDown", v) end
 })
 AbilityTab:AddCheckbox("FastVault", {
     Text = "Fast Vault",
     Default = false,
-    Callback = function(v) FastVault.Enabled = v end
+    Callback = function(v) FastVault.Enabled = v Notify("Fast Vault", v) end
 })
 AbilityTab:AddSlider("VaultSpeed", {
     Text = "Animation Speed",
@@ -2349,6 +2419,7 @@ AbilityTab:AddCheckbox("MoonwalkButton", {
     Callback = function(v)
         Moonwalk.ShowButton = v
         if v then createMoonwalkButton() else removeMoonwalkButton() end
+        Notify("Moonwalk Button", v)
     end
 })
 
@@ -2362,6 +2433,7 @@ AbilityTab:AddLabel("Moonwalk Keybind"):AddKeyPicker("MoonwalkKey", {
             local hum = getHum()
             if hum then hum.WalkSpeed = 16 end
         end
+        Notify("Moonwalk", state)
     end
 })
 
@@ -2394,17 +2466,17 @@ AbilityTab:AddLabel("Side Step Evade Keybind"):AddKeyPicker("EvadeBind", {
     Text = "Side Step (toggle)",
     Callback = function(state)
         Evade.Enabled = state
-        Library:Notify({
-            Title = state and "Evade ON" or "Evade OFF",
-            Duration = 2
-        })
+        Notify("Side Step Evade", state)
     end
 })
 
 AbilityTab:AddCheckbox("EvadeEnable", {
     Text = "Side Step Evade (behind killer)",
     Default = false,
-    Callback = function(v) Evade.Enabled = v end
+    Callback = function(v)
+        Evade.Enabled = v
+        Notify("Side Step Evade", v)
+    end
 })
 
 AbilityTab:AddDropdown("EvadeMode", {
@@ -2451,22 +2523,28 @@ AbilityTab:AddSlider("EvadeOffsetSide", {
     Callback = function(v) Evade.OffsetSide = v end
 })
 
+AbilityTab:AddToggle("EvadeDodgeAttack", {
+    Text = "Dodge Attack Side",
+    Default = true,
+    Callback = function(v) Evade.DodgeAttack = v Notify("Dodge Attack Side", v) end
+})
+
 AbilityTab:AddToggle("EvadeTeleport", {
     Text = "Instant Teleport (else smooth)",
     Default = true,
-    Callback = function(v) Evade.Teleport = v end
+    Callback = function(v) Evade.Teleport = v Notify("Instant Teleport", v) end
 })
 
 AbilityTab:AddToggle("EvadeLookAtKiller", {
     Text = "Look at killer after",
     Default = true,
-    Callback = function(v) Evade.LookAtKiller = v end
+    Callback = function(v) Evade.LookAtKiller = v Notify("Look at killer", v) end
 })
 
 AbilityTab:AddToggle("EvadeRaycast", {
     Text = "Wall check (recommended)",
     Default = true,
-    Callback = function(v) Evade.UseRaycast = v end
+    Callback = function(v) Evade.UseRaycast = v Notify("Wall Check", v) end
 })
 
 AbilityTab:AddSlider("EvadeDuration", {
@@ -2500,7 +2578,7 @@ AbilityTab:AddDropdown("EvadeDirection", {
 AbilityTab:AddToggle("EvadeApproach", {
     Text = "Only when killer approaches",
     Default = true,
-    Callback = function(v) Evade.RequireApproach = v end
+    Callback = function(v) Evade.RequireApproach = v Notify("Only when approaching", v) end
 })
 
 AbilityTab:AddSlider("EvadeCooldown", {
@@ -2518,6 +2596,7 @@ KillerTab:AddCheckbox("AutoStalk", {
     Callback = function(v)
         AutoStalk.Enabled = v
         if v then startAutoStalk() else stopAutoStalk() end
+        Notify("Auto Stalk", v)
     end
 })
 KillerTab:AddCheckbox("AttackAim", {
@@ -2526,17 +2605,18 @@ KillerTab:AddCheckbox("AttackAim", {
     Callback = function(v)
         AttackAim.Enabled = v
         if v then startAttackAim() end
+        Notify("AimLock Attack", v)
     end
 })
 KillerTab:AddCheckbox("KillAll", {
     Text = "Auto Kill All",
     Default = false,
-    Callback = function(v) Killer.KillAll = v end
+    Callback = function(v) Killer.KillAll = v Notify("Auto Kill All", v) end
 })
 KillerTab:AddCheckbox("AutoAttack", {
     Text = "Auto Spam Attack",
     Default = false,
-    Callback = function(v) Killer.AutoAttack = v end
+    Callback = function(v) Killer.AutoAttack = v Notify("Auto Spam Attack", v) end
 })
 KillerTab:AddSlider("AttackDelay", {
     Text = "Attack Delay",
@@ -2577,6 +2657,7 @@ local AutoParryToggle = ParryBox:AddCheckbox("AutoParry", {
     Callback = function(v)
         Auto.Parry = v
         ParryRangeVisual.Enabled = v
+        Notify("Auto Parry", v)
     end
 })
 AutoParryToggle:AddColorPicker("ParryRangeColor", {
@@ -2594,6 +2675,7 @@ ParryBox:AddCheckbox("ShowParryRange", {
     Callback = function(Value)
         ParryRangeVisual.Enabled = Value
         if not Value and ParryCircle then ParryCircle:Destroy() ParryCircle = nil end
+        Notify("Show Parry Range", Value)
     end
 })
 ParryBox:AddSlider("ParryDistance", {
@@ -2616,7 +2698,7 @@ ParryBox:AddSlider("FaceSensitivity", {
 AimlockBox:AddToggle("GunAimEnabled", {
     Text = "Aim Lock",
     Default = false,
-    Callback = function(v) GunAim.Enabled = v end
+    Callback = function(v) GunAim.Enabled = v Notify("Aim Lock", v) end
 })
 AimlockBox:AddDropdown("GunAimTarget", {
     Values = { "Killer", "Survivor", "SCP" },
@@ -2657,6 +2739,7 @@ MovementBox:AddCheckbox("WalkSpeedToggle", {
             local hum = getHum()
             if hum then hum.WalkSpeed = Movement.OriginalWalkSpeed end
         end
+        Notify("Walk Speed", v)
     end
 })
 MovementBox:AddSlider("WalkSpeedSlider", {
@@ -2673,7 +2756,7 @@ MovementBox:AddSlider("WalkSpeedSlider", {
 MovementBox:AddCheckbox("NoClipToggle", {
     Text = "No Clip",
     Default = false,
-    Callback = function(v) toggleNoClip(v) end
+    Callback = function(v) toggleNoClip(v) Notify("No Clip", v) end
 })
 MovementBox:AddCheckbox("JumpPowerToggle", {
     Text = "Custom Jump Power",
@@ -2685,6 +2768,7 @@ MovementBox:AddCheckbox("JumpPowerToggle", {
             local hum = getHum()
             if hum then hum.JumpPower = Movement.OriginalJumpPower end
         end
+        Notify("Custom Jump Power", v)
     end
 })
 MovementBox:AddSlider("JumpPowerSlider", {
@@ -2719,6 +2803,7 @@ EmoteBox:AddToggle("ShowEmoteButton", {
     Callback = function(v)
         EmoteButton.Show = v
         if v then createEmoteButton() else removeEmoteButton() end
+        Notify("Emote Button", v)
     end
 })
 
@@ -2731,39 +2816,40 @@ FunBox:AddToggle("JerkTool", {
         else
             if currentJerkTool then currentJerkTool:Destroy() currentJerkTool = nil end
         end
+        Notify("Jerk Tool", v)
     end
 })
 
 VisualBox:AddCheckbox("Fullbright", {
     Text = "Fullbright",
     Default = false,
-    Callback = function(v) Visual.Fullbright = v applyVisual() end
+    Callback = function(v) Visual.Fullbright = v applyVisual() Notify("Fullbright", v) end
 })
 VisualBox:AddCheckbox("NoShadow", {
     Text = "No Shadow",
     Default = false,
-    Callback = function(v) Visual.NoShadow = v end
+    Callback = function(v) Visual.NoShadow = v Notify("No Shadow", v) end
 })
 VisualBox:AddCheckbox("LowGraphics", {
     Text = "Low Graphics",
     Default = false,
-    Callback = function(v) Visual.LowGraphics = v applyOptimization() end
+    Callback = function(v) Visual.LowGraphics = v applyOptimization() Notify("Low Graphics", v) end
 })
 VisualBox:AddCheckbox("NoScreenEffects", {
     Text = "No Screen Effects",
     Default = false,
-    Callback = function(v) Visual.NoScreenEffects = v applyNoScreenEffects() end
+    Callback = function(v) Visual.NoScreenEffects = v applyNoScreenEffects() Notify("No Screen Effects", v) end
 })
 VisualBox:AddCheckbox("CleanSky", {
     Text = "Clean Sky",
     Default = false,
-    Callback = function(v) Visual.CleanSky = v applyOptimization() end
+    Callback = function(v) Visual.CleanSky = v applyOptimization() Notify("Clean Sky", v) end
 })
 
 ZoomBox:AddToggle("UnlimitedZoom", {
     Text = "Unlimited Zoom Out",
     Default = false,
-    Callback = function(v) CameraZoom.UnlimitedZoom = v applyUnlimitedZoom() end
+    Callback = function(v) CameraZoom.UnlimitedZoom = v applyUnlimitedZoom() Notify("Unlimited Zoom", v) end
 })
 ZoomBox:AddSlider("MaxZoomDistance", {
     Text = "Max Zoom Distance",
@@ -2779,7 +2865,7 @@ ZoomBox:AddSlider("MaxZoomDistance", {
 ZoomBox:AddToggle("CustomFOV", {
     Text = "Custom FOV",
     Default = false,
-    Callback = function(Value) CameraZoom.FOVEnabled = Value applyCameraFOV() end
+    Callback = function(Value) CameraZoom.FOVEnabled = Value applyCameraFOV() Notify("Custom FOV", Value) end
 })
 ZoomBox:AddSlider("CameraFOV", {
     Text = "Camera FOV",
@@ -2813,7 +2899,7 @@ TimeBox:AddSlider("Brightness", {
 SettingBox:AddToggle("ShowCustomCursor", {
     Text = "Custom Cursor",
     Default = not IS_MOBILE,
-    Callback = function(Value) Library.ShowCustomCursor = Value end
+    Callback = function(Value) Library.ShowCustomCursor = Value Notify("Custom Cursor", Value) end
 })
 SettingBox:AddDropdown("NotificationSide", {
     Values = { "Left", "Right" },
@@ -2842,7 +2928,7 @@ SettingBox:AddSlider("UICornerSlider", {
 SettingBox:AddToggle("WatermarkToggle", {
     Text = "Watermark",
     Default = true,
-    Callback = function(Value) Watermark.Visible = Value end
+    Callback = function(Value) Watermark.Visible = Value Notify("Watermark", Value) end
 })
 
 SettingBox:AddDivider()
