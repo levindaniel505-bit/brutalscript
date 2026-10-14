@@ -520,15 +520,16 @@ local Moonwalk = { Enabled = false, ShowButton = false, SpamSpeed = 30, Intensit
 local MoonwalkConnection = nil
 local MoonwalkButton = nil
 
--- ============== ORBIT CAMERA (with WASD) CONFIG ==============
-local Orbit = {
+-- ============== SIDE STEP (evade killer, walk imitation) ==============
+local Evade = {
     Enabled = false,
-    BindActive = false,
-    Radius = 25,
-    Speed = 1.5,
-    Height = 3,
-    Target = nil,
-    Angle = 0,
+    Radius = 15,
+    Duration = 0.8,
+    Cooldown = 2,
+    Direction = -1,      -- -1 = вправо, 1 = влево
+    Angle = 160,
+    Active = false,
+    LastTrigger = 0,
 }
 
 local CameraZoom = { UnlimitedZoom = false, MaxDistance = 1000, MinDistance = 0, FOVEnabled = false, FOV = 70, DefaultFOV = workspace.CurrentCamera.FieldOfView }
@@ -563,70 +564,87 @@ local function getHum()
     return c and c:FindFirstChildOfClass("Humanoid")
 end
 
--- ============== ORBIT CAMERA (with WASD + BIND) LOGIC ==============
--- Камера вращается вокруг цели, когда зажат бинд.
--- Игрок жмёт W — персонаж идёт по камере → оббегает цель по кругу.
-task.spawn(function()
-    while task.wait(0.03) do
-        if not Orbit.Enabled or not Orbit.BindActive then
-            Orbit.Target = nil
-            continue
+-- ============== SIDE STEP LOGIC ==============
+local function performEvade(killerRoot)
+    local myRoot = getRoot()
+    local hum = getHum()
+    if not myRoot or not hum or not killerRoot then return end
+
+    local center = Vector3.new(killerRoot.Position.X, myRoot.Position.Y, killerRoot.Position.Z)
+    local startPos = myRoot.Position
+
+    local toMe = startPos - center
+    local flat = Vector3.new(toMe.X, 0, toMe.Z)
+    local r = flat.Magnitude
+    if r < 2 then r = 4 end
+
+    local startAngle = math.atan2(flat.Z, flat.X)
+    local totalAngle = math.rad(Evade.Angle) * Evade.Direction
+    local duration = Evade.Duration
+    local startTick = tick()
+
+    Evade.Active = true
+
+    while tick() - startTick < duration do
+        if not myRoot.Parent or not killerRoot.Parent then break end
+
+        local progress = (tick() - startTick) / duration
+        local eased = progress < 0.5 and 2 * progress * progress or 1 - ((-2 * progress + 2) ^ 2) / 2
+        local angle = startAngle + totalAngle * eased
+
+        local targetPos = Vector3.new(
+            center.X + math.cos(angle) * r,
+            startPos.Y,
+            center.Z + math.sin(angle) * r
+        )
+
+        -- Humanoid:Move принимает направление — Roblox сам двигает с анимацией ходьбы
+        local direction = targetPos - myRoot.Position
+        direction = Vector3.new(direction.X, 0, direction.Z)
+        if direction.Magnitude > 0.1 then
+            hum:Move(direction.Unit)
         end
+
+        RunService.RenderStepped:Wait()
+    end
+
+    hum:Move(Vector3.zero)
+    Evade.Active = false
+end
+
+task.spawn(function()
+    while task.wait(0.05) do
+        if not Evade.Enabled or Evade.Active then continue end
+        if tick() - Evade.LastTrigger < Evade.Cooldown then continue end
 
         local myRoot = getRoot()
-        local cam = workspace.CurrentCamera
-        if not myRoot or not cam then continue end
+        if not myRoot then continue end
 
-        -- Проверка валидности цели
-        if Orbit.Target then
-            local tr = Orbit.Target
-            if not tr.Parent then
-                Orbit.Target = nil
-            else
-                local hum = tr.Parent:FindFirstChildOfClass("Humanoid")
-                local dist = (tr.Position - myRoot.Position).Magnitude
-                if not hum or hum.Health <= 0 or dist > Orbit.Radius * 1.5 then
-                    Orbit.Target = nil
-                end
-            end
-        end
-
-        -- Поиск новой цели
-        if not Orbit.Target then
-            local shortest = Orbit.Radius
-            for _, plr in ipairs(Players:GetPlayers()) do
-                if plr ~= LocalPlayer and plr.Character then
-                    local hrp = plr.Character:FindFirstChild("HumanoidRootPart")
-                    local hum = plr.Character:FindFirstChildOfClass("Humanoid")
-                    if hrp and hum and hum.Health > 0 then
-                        local dist = (hrp.Position - myRoot.Position).Magnitude
-                        if dist < shortest then
-                            shortest = dist
-                            Orbit.Target = hrp
+        local target = nil
+        local shortest = Evade.Radius
+        for _, plr in ipairs(Players:GetPlayers()) do
+            if plr ~= LocalPlayer and plr.Team and plr.Team.Name == "Killer" and plr.Character then
+                local hrp = plr.Character:FindFirstChild("HumanoidRootPart")
+                local h = plr.Character:FindFirstChildOfClass("Humanoid")
+                if hrp and h and h.Health > 0 then
+                    local d = (hrp.Position - myRoot.Position).Magnitude
+                    if d < shortest and d > 2 then
+                        local dirTo = (hrp.Position - myRoot.Position).Unit
+                        local flatDir = Vector3.new(dirTo.X, 0, dirTo.Z).Unit
+                        local flatLook = Vector3.new(myRoot.CFrame.LookVector.X, 0, myRoot.CFrame.LookVector.Z).Unit
+                        local dot = flatLook:Dot(flatDir)
+                        if dot < -0.1 then
+                            shortest = d
+                            target = hrp
                         end
                     end
                 end
             end
         end
 
-        -- Крутим камеру вокруг цели
-        if Orbit.Target then
-            local center = Orbit.Target.Position
-            local toMe = myRoot.Position - center
-            local flat = Vector3.new(toMe.X, 0, toMe.Z)
-            local r = flat.Magnitude
-            if r < 3 then r = 3 end
-
-            Orbit.Angle = Orbit.Angle + Orbit.Speed * 0.03
-
-            local camPos = center + Vector3.new(
-                math.cos(Orbit.Angle) * r,
-                Orbit.Height,
-                math.sin(Orbit.Angle) * r
-            )
-
-            local lookAt = center + Vector3.new(0, 1, 0)
-            cam.CFrame = CFrame.new(camPos, lookAt)
+        if target then
+            Evade.LastTrigger = tick()
+            task.spawn(function() performEvade(target) end)
         end
     end
 end)
@@ -1864,7 +1882,7 @@ RunService.Heartbeat:Connect(function()
                 end
             end
         end
-        if Movement.WalkSpeedEnabled and not Moonwalk.Enabled then
+        if Movement.WalkSpeedEnabled and not Moonwalk.Enabled and not Evade.Active then
             local hum = getHum()
             if hum then
                 if shouldDisableWalkSpeed() then
@@ -2248,53 +2266,56 @@ AbilityTab:AddButton({
 
 AbilityTab:AddDivider()
 
-AbilityTab:AddCheckbox("OrbitEnable", {
-    Text = "Orbit Camera (W to move)",
+AbilityTab:AddCheckbox("EvadeEnable", {
+    Text = "Side Step Evade (behind killer)",
     Default = false,
-    Callback = function(v)
-        Orbit.Enabled = v
-        if v then
-            local myRoot = getRoot()
-            if myRoot then
-                Orbit.Angle = math.atan2(myRoot.Position.Z, myRoot.Position.X)
-                Orbit.Target = nil
-            end
-        end
-    end
+    Callback = function(v) Evade.Enabled = v end
 })
 
-AbilityTab:AddLabel("Orbit Keybind"):AddKeyPicker("OrbitBind", {
-    Default = "C",
-    Mode = "Hold",
-    Text = "Orbit (hold)",
-    Callback = function(state)
-        Orbit.BindActive = state
-    end
-})
-
-AbilityTab:AddSlider("OrbitRadius", {
-    Text = "Orbit Radius",
-    Default = 25,
+AbilityTab:AddSlider("EvadeRadius", {
+    Text = "Trigger Radius",
+    Default = 15,
     Min = 5,
-    Max = 60,
+    Max = 40,
     Rounding = 0,
-    Callback = function(v) Orbit.Radius = v end
+    Callback = function(v) Evade.Radius = v end
 })
-AbilityTab:AddSlider("OrbitSpeed", {
-    Text = "Orbit Speed",
-    Default = 1.5,
+
+AbilityTab:AddSlider("EvadeDuration", {
+    Text = "Evade Duration",
+    Default = 0.8,
     Min = 0.3,
-    Max = 5,
-    Rounding = 1,
-    Callback = function(v) Orbit.Speed = v end
+    Max = 2,
+    Rounding = 2,
+    Callback = function(v) Evade.Duration = v end
 })
-AbilityTab:AddSlider("OrbitHeight", {
-    Text = "Camera Height",
-    Default = 3,
-    Min = 0,
+
+AbilityTab:AddSlider("EvadeAngle", {
+    Text = "Evade Angle (deg)",
+    Default = 160,
+    Min = 60,
+    Max = 200,
+    Rounding = 0,
+    Callback = function(v) Evade.Angle = v end
+})
+
+AbilityTab:AddDropdown("EvadeDirection", {
+    Text = "Direction",
+    Values = { "Right", "Left" },
+    Default = 1,
+    Multi = false,
+    Callback = function(v)
+        Evade.Direction = (v == "Right") and -1 or 1
+    end
+})
+
+AbilityTab:AddSlider("EvadeCooldown", {
+    Text = "Cooldown",
+    Default = 2,
+    Min = 0.5,
     Max = 10,
     Rounding = 1,
-    Callback = function(v) Orbit.Height = v end
+    Callback = function(v) Evade.Cooldown = v end
 })
 
 KillerTab:AddCheckbox("AutoStalk", {
