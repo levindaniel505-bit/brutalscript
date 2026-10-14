@@ -10,15 +10,41 @@ Library.Scheme.OutlineColor    = Color3.fromRGB(180, 80, 255)
 Library.Scheme.FontColor       = Color3.fromRGB(240, 240, 240)
 
 local LOGO_ID = "rbxassetid://83643298666145"
+local IS_MOBILE = game:GetService("UserInputService").TouchEnabled
 
 -- ================= LOADING + KEY SYSTEM =================
 
 local VALID_KEYS = {
-    ["BRUTAL-FREE-0001"] = true,
-    ["BRUTAL-7D-0002"]   = true,
-    ["BRUTAL-30D-0003"]  = true,
-    ["BRUTAL-VIP-0004"]  = true,
-    ["BRUTAL-TEST-0005"] = true,
+    ["BRUTAL-K7X9M2QF"] = true,
+    ["BRUTAL-P3N8R5VZ"] = true,
+    ["BRUTAL-D6H1T4LY"] = true,
+    ["BRUTAL-W8B2C7JX"] = true,
+    ["BRUTAL-M5F9A3QE"] = true,
+    ["BRUTAL-R2V6Y1KN"] = true,
+    ["BRUTAL-T7G4P8HW"] = true,
+    ["BRUTAL-X9L3D5ZB"] = true,
+    ["BRUTAL-N1Q7M4FK"] = true,
+    ["BRUTAL-Y6J2S9VA"] = true,
+    ["BRUTAL-C4H8W1RN"] = true,
+    ["BRUTAL-Z5K3B7MP"] = true,
+    ["BRUTAL-F9T6D2XL"] = true,
+    ["BRUTAL-V1P4N8QY"] = true,
+    ["BRUTAL-G7R3H5JW"] = true,
+    ["BRUTAL-B8M1K6SZ"] = true,
+    ["BRUTAL-J4X9C2TV"] = true,
+    ["BRUTAL-Q6W7F3LD"] = true,
+    ["BRUTAL-S2Y5P8HN"] = true,
+    ["BRUTAL-L9D4R1KX"] = true,
+    ["BRUTAL-H3V7M6BQ"] = true,
+    ["BRUTAL-E8N2J5WT"] = true,
+    ["BRUTAL-U1C6F9PZ"] = true,
+    ["BRUTAL-A5K8L4YH"] = true,
+    ["BRUTAL-P7Q2D1NX"] = true,
+    ["BRUTAL-IX9W3C6RM"] = true,
+    ["BRUTAL-O4H8V5JT"] = true,
+    ["BRUTAL-K1M7B2QF"] = true,
+    ["BRUTAL-R6T3Z9LD"] = true,
+    ["BRUTAL-W2S5P1KH"] = true,
 }
 
 local KeyVerified = false
@@ -192,16 +218,6 @@ local function ShowKeyPrompt()
     status.TextSize = 13
     status.Parent = bg
 
-    local hint = Instance.new("TextLabel")
-    hint.Size = UDim2.fromOffset(340, 20)
-    hint.Position = UDim2.new(0.5, -170, 0.5, 130)
-    hint.BackgroundTransparency = 1
-    hint.Text = "Test keys: BRUTAL-FREE-0001 / BRUTAL-VIP-0004"
-    hint.TextColor3 = Color3.fromRGB(120, 120, 120)
-    hint.Font = Enum.Font.Gotham
-    hint.TextSize = 11
-    hint.Parent = bg
-
     btn.MouseButton1Click:Connect(function()
         local key = box.Text
         if key == "" then
@@ -267,100 +283,66 @@ until KeyVerified
 
 -- ================= MAIN SCRIPT =================
 
+local WindowSize = IS_MOBILE and UDim2.fromOffset(340, 300) or UDim2.fromOffset(600, 400)
+
 local Window = Library:CreateWindow({
     Title = "BRUTALSCRIPT",
     Footer = "BRUTALSCRIPT - Violence District",
     Icon = LOGO_ID,
     IconSize = UDim2.fromOffset(40, 40),
     CornerRadius = 0,
-    NotifySide = "Right",
-    ShowCustomCursor = true,
-    ShowMobileButtons = false,
+    NotifySide = IS_MOBILE and "Left" or "Right",
+    ShowCustomCursor = not IS_MOBILE,
+    ShowMobileButtons = IS_MOBILE,
     ToggleKeybind = Enum.KeyCode.RightShift,
-    Size = UDim2.fromOffset(600, 400),
+    Size = WindowSize,
     EnableSidebarResize = false,
-    EnableCompacting = false,
-    SidebarCompacted = false,
+    EnableCompacting = IS_MOBILE,
+    SidebarCompacted = IS_MOBILE,
 })
 
--- ============== TOP TABS PATCH ==============
-task.spawn(function()
-    task.wait(1.5)
+-- ============== MOBILE OPEN BUTTON ==============
+if IS_MOBILE then
+    task.spawn(function()
+        task.wait(2)
+        local obsidian = game:GetService("CoreGui"):FindFirstChild("Obsidian")
+        if not obsidian then return end
 
-    local CoreGui = game:GetService("CoreGui")
+        if obsidian:FindFirstChild("BrutalOpenButton") then return end
 
-    local obsidian
-    for _, gui in ipairs(CoreGui:GetChildren()) do
-        if gui:IsA("ScreenGui") and gui.Name == "Obsidian" then
-            obsidian = gui
-            break
-        end
-    end
+        local btn = Instance.new("TextButton")
+        btn.Name = "BrutalOpenButton"
+        btn.Size = UDim2.fromOffset(60, 60)
+        btn.Position = UDim2.new(0, 15, 0.5, -30)
+        btn.BackgroundColor3 = Color3.fromRGB(180, 80, 255)
+        btn.BackgroundTransparency = 0.15
+        btn.Text = ""
+        btn.AutoButtonColor = false
+        btn.Parent = obsidian
 
-    if not obsidian then return end
+        local corner = Instance.new("UICorner")
+        corner.CornerRadius = UDim.new(1, 0)
+        corner.Parent = btn
 
-    local mainFrame
-    for _, obj in ipairs(obsidian:GetDescendants()) do
-        if obj:IsA("Frame") and obj.Name == "Main" then
-            mainFrame = obj
-            break
-        end
-    end
+        local stroke = Instance.new("UIStroke")
+        stroke.Color = Color3.fromRGB(255, 255, 255)
+        stroke.Thickness = 2
+        stroke.Parent = btn
 
-    if not mainFrame then return end
+        local img = Instance.new("ImageLabel")
+        img.Size = UDim2.fromScale(0.75, 0.75)
+        img.Position = UDim2.fromScale(0.125, 0.125)
+        img.BackgroundTransparency = 1
+        img.Image = LOGO_ID
+        img.Parent = btn
 
-    local sidebar
-    for _, obj in ipairs(mainFrame:GetDescendants()) do
-        if obj:IsA("Frame") and obj.Name == "Sidebar" then
-            sidebar = obj
-            break
-        end
-    end
+        btn.MouseButton1Click:Connect(function()
+            Library:Toggle()
+        end)
 
-    if not sidebar then return end
-
-    local tabHolder
-    for _, obj in ipairs(sidebar:GetDescendants()) do
-        if obj:IsA("Frame") and obj.Name == "Tabs" then
-            tabHolder = obj
-            break
-        end
-    end
-
-    if not tabHolder then
-        tabHolder = sidebar
-    end
-
-    sidebar.Size = UDim2.new(1, 0, 0, 44)
-    sidebar.Position = UDim2.new(0, 0, 0, 0)
-    sidebar.BackgroundColor3 = Color3.fromRGB(20, 20, 20)
-
-    tabHolder.Size = UDim2.new(1, 0, 1, 0)
-    tabHolder.Position = UDim2.new(0, 0, 0, 0)
-    tabHolder.BackgroundTransparency = 1
-
-    local layout = tabHolder:FindFirstChildOfClass("UIListLayout")
-    if layout then
-        layout.FillDirection = Enum.FillDirection.Horizontal
-        layout.SortOrder = Enum.SortOrder.LayoutOrder
-        layout.Padding = UDim.new(0, 6)
-        layout.HorizontalAlignment = Enum.HorizontalAlignment.Center
-        layout.VerticalAlignment = Enum.VerticalAlignment.Center
-    end
-
-    for _, child in ipairs(tabHolder:GetChildren()) do
-        if child:IsA("TextButton") or child:IsA("ImageButton") then
-            child.Size = UDim2.new(0, 100, 1, 0)
-        end
-    end
-
-    for _, obj in ipairs(mainFrame:GetDescendants()) do
-        if obj:IsA("Frame") and obj.Name == "Content" then
-            obj.Position = UDim2.new(0, 0, 0, 50)
-            obj.Size = UDim2.new(1, 0, 1, -50)
-        end
-    end
-end)
+        Library:MakeDraggable(btn, btn, true)
+    end)
+end
 
 local Stats = game:GetService("Stats")
 local Players = game:GetService("Players")
@@ -448,15 +430,18 @@ task.spawn(function()
                     inner.Transparency = 0.2
                     inner.Parent = obj
 
-                    local bgImage = Instance.new("ImageLabel")
-                    bgImage.Name = "BrutalLogo"
-                    bgImage.Size = UDim2.fromScale(0.55, 0.55)
-                    bgImage.Position = UDim2.fromScale(0.225, 0.225)
-                    bgImage.BackgroundTransparency = 1
-                    bgImage.Image = LOGO_ID
-                    bgImage.ImageTransparency = 0.82
-                    bgImage.ZIndex = 0
-                    bgImage.Parent = obj
+                    if not IS_MOBILE then
+                        local bgImage = Instance.new("ImageLabel")
+                        bgImage.Name = "BrutalLogo"
+                        bgImage.Size = UDim2.fromScale(0.55, 0.55)
+                        bgImage.Position = UDim2.fromScale(0.225, 0.225)
+                        bgImage.BackgroundTransparency = 1
+                        bgImage.Image = LOGO_ID
+                        bgImage.ImageTransparency = 0.82
+                        bgImage.ZIndex = 0
+                        bgImage.Parent = obj
+                    end
+
                     break
                 end
             end
@@ -2095,7 +2080,7 @@ local function createMoonwalkButton()
     gui.Parent = PlayerGui
 
     local btn = Instance.new("ImageButton")
-    btn.Size = UDim2.new(0, 50, 0, 50)
+    btn.Size = UDim2.new(0, 60, 0, 60)
     btn.Position = UDim2.new(0.65, 0, 0.75, 0)
 
     btn.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
@@ -2109,10 +2094,17 @@ local function createMoonwalkButton()
 
     local stroke = Instance.new("UIStroke")
     stroke.ApplyStrokeMode = Enum.ApplyStrokeMode.Border
-    stroke.Thickness = 1.2
+    stroke.Thickness = 1.5
     stroke.Color = Color3.fromRGB(255, 255, 255)
     stroke.Transparency = 0.8
     stroke.Parent = btn
+
+    local img = Instance.new("ImageLabel")
+    img.Size = UDim2.fromScale(0.8, 0.8)
+    img.Position = UDim2.fromScale(0.1, 0.1)
+    img.BackgroundTransparency = 1
+    img.Image = LOGO_ID
+    img.Parent = btn
 
 btn.MouseButton1Click:Connect(function()
     Moonwalk.Enabled = not Moonwalk.Enabled
@@ -2121,7 +2113,7 @@ btn.MouseButton1Click:Connect(function()
     local hum = char and char:FindFirstChildOfClass("Humanoid")
 
     if Moonwalk.Enabled then
-        stroke.Color = Color3.fromRGB(255, 255, 255)
+        stroke.Color = Color3.fromRGB(180, 80, 255)
 
         if not MoonwalkConnection then
             startMoonwalk()
@@ -2875,7 +2867,7 @@ local function createEmoteButton()
     gui.Parent = PlayerGui
 
     local btn = Instance.new("ImageButton")
-    btn.Size = UDim2.new(0, 50, 0, 50)
+    btn.Size = UDim2.new(0, 60, 0, 60)
     btn.Position = UDim2.new(0.55, 0, 0.75, 0)
     btn.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
     btn.BackgroundTransparency = 0.9
@@ -2887,26 +2879,33 @@ local function createEmoteButton()
 
     local stroke = Instance.new("UIStroke")
     stroke.ApplyStrokeMode = Enum.ApplyStrokeMode.Border
-    stroke.Thickness = 1.2
+    stroke.Thickness = 1.5
     stroke.Color = Color3.fromRGB(255, 255, 255)
     stroke.Transparency = 0.8
     stroke.Parent = btn
 
+    local img = Instance.new("ImageLabel")
+    img.Size = UDim2.fromScale(0.8, 0.8)
+    img.Position = UDim2.fromScale(0.1, 0.1)
+    img.BackgroundTransparency = 1
+    img.Image = LOGO_ID
+    img.Parent = btn
+
     local label = Instance.new("TextLabel")
-    label.Size = UDim2.new(0, 80, 0, 20)
-    label.Position = UDim2.new(0.5, -40, -0.6, 0)
+    label.Size = UDim2.new(0, 100, 0, 20)
+    label.Position = UDim2.new(0.5, -50, -0.6, 0)
     label.BackgroundTransparency = 1
     label.Text = Emote.Selected
     label.TextColor3 = Color3.fromRGB(255, 255, 255)
     label.TextStrokeTransparency = 0.5
     label.Font = Enum.Font.GothamBold
-    label.TextSize = 11
+    label.TextSize = 12
     label.Parent = btn
 
     btn.MouseButton1Click:Connect(function()
         playEmote(Emote.Selected)
 
-        stroke.Color = Color3.fromRGB(255, 255, 255)
+        stroke.Color = Color3.fromRGB(180, 80, 255)
         task.delay(0.3, function()
             stroke.Color = Color3.fromRGB(255, 255, 255)
         end)
@@ -4030,7 +4029,7 @@ TimeBox:AddSlider("Brightness", {
 
 SettingBox:AddToggle("ShowCustomCursor", {
 	Text = "Custom Cursor",
-	Default = true,
+	Default = not IS_MOBILE,
 	Callback = function(Value)
 		Library.ShowCustomCursor = Value
 	end,
@@ -4038,7 +4037,7 @@ SettingBox:AddToggle("ShowCustomCursor", {
 
 SettingBox:AddDropdown("NotificationSide", {
 	Values = { "Left", "Right" },
-	Default = "Right",
+	Default = IS_MOBILE and "Left" or "Right",
 	Text = "Notification Side",
 	Callback = function(Value)
 		Library:SetNotifySide(Value)
