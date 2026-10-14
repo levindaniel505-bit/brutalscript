@@ -3,11 +3,13 @@ local Library = loadstring(game:HttpGet(repo .. "Library.lua"))()
 local ThemeManager = loadstring(game:HttpGet(repo .. "addons/ThemeManager.lua"))()
 local SaveManager = loadstring(game:HttpGet(repo .. "addons/SaveManager.lua"))()
 
-Library.Scheme.AccentColor     = Color3.fromRGB(255, 255, 255)
+Library.Scheme.AccentColor     = Color3.fromRGB(180, 80, 255)
 Library.Scheme.BackgroundColor = Color3.fromRGB(12, 12, 12)
 Library.Scheme.MainColor       = Color3.fromRGB(35, 35, 35)
-Library.Scheme.OutlineColor    = Color3.fromRGB(255, 255, 255)
+Library.Scheme.OutlineColor    = Color3.fromRGB(180, 80, 255)
 Library.Scheme.FontColor       = Color3.fromRGB(240, 240, 240)
+
+local LOGO_ID = "rbxassetid://83643298666145"
 
 -- ================= LOADING + KEY SYSTEM =================
 
@@ -34,6 +36,13 @@ local function ShowLoadingScreen()
     bg.BackgroundColor3 = Color3.fromRGB(10, 10, 10)
     bg.BorderSizePixel = 0
     bg.Parent = gui
+
+    local logo = Instance.new("ImageLabel")
+    logo.Size = UDim2.fromOffset(120, 120)
+    logo.Position = UDim2.new(0.5, -60, 0.5, -160)
+    logo.BackgroundTransparency = 1
+    logo.Image = LOGO_ID
+    logo.Parent = bg
 
     local title = Instance.new("TextLabel")
     title.Size = UDim2.new(1, 0, 0, 60)
@@ -65,13 +74,13 @@ local function ShowLoadingScreen()
     barBg.Parent = bg
 
     local barStroke = Instance.new("UIStroke")
-    barStroke.Color = Color3.fromRGB(255, 255, 255)
+    barStroke.Color = Color3.fromRGB(180, 80, 255)
     barStroke.Thickness = 1
     barStroke.Parent = barBg
 
     local barFill = Instance.new("Frame")
     barFill.Size = UDim2.new(0, 0, 1, 0)
-    barFill.BackgroundColor3 = Color3.fromRGB(200, 30, 30)
+    barFill.BackgroundColor3 = Color3.fromRGB(180, 80, 255)
     barFill.BorderSizePixel = 0
     barFill.Parent = barBg
 
@@ -111,6 +120,13 @@ local function ShowKeyPrompt()
     bg.BorderSizePixel = 0
     bg.Parent = gui
 
+    local logo = Instance.new("ImageLabel")
+    logo.Size = UDim2.fromOffset(120, 120)
+    logo.Position = UDim2.new(0.5, -60, 0.5, -210)
+    logo.BackgroundTransparency = 1
+    logo.Image = LOGO_ID
+    logo.Parent = bg
+
     local title = Instance.new("TextLabel")
     title.Size = UDim2.new(1, 0, 0, 60)
     title.Position = UDim2.new(0, 0, 0.5, -110)
@@ -147,14 +163,14 @@ local function ShowKeyPrompt()
     box.Parent = bg
 
     local boxStroke = Instance.new("UIStroke")
-    boxStroke.Color = Color3.fromRGB(255, 255, 255)
+    boxStroke.Color = Color3.fromRGB(180, 80, 255)
     boxStroke.Thickness = 1
     boxStroke.Parent = box
 
     local btn = Instance.new("TextButton")
     btn.Size = UDim2.fromOffset(340, 40)
     btn.Position = UDim2.new(0.5, -170, 0.5, 45)
-    btn.BackgroundColor3 = Color3.fromRGB(200, 30, 30)
+    btn.BackgroundColor3 = Color3.fromRGB(180, 80, 255)
     btn.Text = "SUBMIT"
     btn.TextColor3 = Color3.fromRGB(255, 255, 255)
     btn.Font = Enum.Font.GothamBold
@@ -254,6 +270,7 @@ until KeyVerified
 local Window = Library:CreateWindow({
     Title = "",
     Footer = "BRUTALSCRIPT - Violence District",
+    Icon = LOGO_ID,
     IconSize = UDim2.fromOffset(40, 40),
     CornerRadius = 0,
     NotifySide = "Right",
@@ -271,6 +288,52 @@ local Players = game:GetService("Players")
 local RunService = game:GetService("RunService")
 
 local Watermark = Library:AddDraggableLabel("BRUTALSCRIPT")
+
+task.spawn(function()
+    task.wait(0.7)
+    local obsidian = game:GetService("CoreGui"):FindFirstChild("Obsidian")
+    if not obsidian then return end
+
+    for _, obj in ipairs(obsidian:GetDescendants()) do
+        if obj:IsA("TextLabel") and obj.Text:find("BRUTALSCRIPT") then
+            local parent = obj.Parent
+            if parent and not parent:FindFirstChildOfClass("UICorner") then
+                local c = Instance.new("UICorner")
+                c.CornerRadius = UDim.new(0, 8)
+                c.Parent = parent
+            end
+            break
+        end
+    end
+
+    for _, obj in ipairs(obsidian:GetDescendants()) do
+        if obj:IsA("Frame") and obj.Name == "Main" then
+            local outer = Instance.new("UIStroke")
+            outer.Color = Color3.fromRGB(255, 255, 255)
+            outer.Thickness = 2
+            outer.ApplyStrokeMode = Enum.ApplyStrokeMode.Border
+            outer.Parent = obj
+
+            local inner = Instance.new("UIStroke")
+            inner.Color = Color3.fromRGB(180, 80, 255)
+            inner.Thickness = 1
+            inner.ApplyStrokeMode = Enum.ApplyStrokeMode.Border
+            inner.Transparency = 0.2
+            inner.Parent = obj
+
+            local bgImage = Instance.new("ImageLabel")
+            bgImage.Name = "BrutalLogo"
+            bgImage.Size = UDim2.fromScale(0.55, 0.55)
+            bgImage.Position = UDim2.fromScale(0.225, 0.225)
+            bgImage.BackgroundTransparency = 1
+            bgImage.Image = LOGO_ID
+            bgImage.ImageTransparency = 0.82
+            bgImage.ZIndex = 0
+            bgImage.Parent = obj
+            break
+        end
+    end
+end)
 
 local FPS = 0
 local Frames = 0
