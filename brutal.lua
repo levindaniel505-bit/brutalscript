@@ -55,10 +55,8 @@ local function loadData()
     local data = {}
     if not isfile or not readfile then return data end
     if not isfile(SAVE_FILE) then return data end
-
     local ok, raw = pcall(readfile, SAVE_FILE)
     if not ok or not raw then return data end
-
     for line in string.gmatch(raw, "[^\r\n]+") do
         local key, ids = string.match(line, "^(.+)=(.+)$")
         if key and ids then
@@ -88,26 +86,21 @@ local function checkKeyWithBinding(key, userId)
     if not VALID_KEYS[key] then
         return false, "Invalid key"
     end
-
     local data = loadData()
     local boundIds = data[key]
-
     if not boundIds then
         data[key] = { userId }
         saveData(data)
         return true, "Key activated!"
     end
-
     for _, id in ipairs(boundIds) do
         if id == userId then
             return true, "Welcome back!"
         end
     end
-
     if #boundIds >= MAX_ACCOUNTS then
         return false, "Key already used on another account"
     end
-
     table.insert(boundIds, userId)
     saveData(data)
     return true, "Key activated!"
@@ -288,15 +281,11 @@ local function ShowKeyPrompt()
             status.Text = "Enter a key"
             return
         end
-
         status.TextColor3 = Color3.fromRGB(200, 200, 200)
         status.Text = "Checking..."
-
         task.wait(0.3)
-
         local userId = game:GetService("Players").LocalPlayer.UserId
         local valid, message = checkKeyWithBinding(key, userId)
-
         if valid then
             status.TextColor3 = Color3.fromRGB(100, 255, 120)
             status.Text = message
@@ -323,9 +312,7 @@ local steps = {
 for _, step in ipairs(steps) do
     local target = step[1]
     local text = step[2]
-
     statusLabel.Text = text
-
     local current = barFill.Size.X.Scale
     while current < target do
         current = math.min(current + 0.02, target)
@@ -337,15 +324,12 @@ end
 
 task.wait(0.5)
 loadingGui:Destroy()
-
 ShowKeyPrompt()
 
 local startTime = tick()
 repeat
     task.wait(0.1)
-    if tick() - startTime > 180 then
-        return
-    end
+    if tick() - startTime > 180 then return end
 until KeyVerified
 
 -- ================= MAIN SCRIPT =================
@@ -404,7 +388,6 @@ if IS_MOBILE then
         btn.MouseButton1Click:Connect(function()
             Library:Toggle()
         end)
-
         Library:MakeDraggable(btn, btn, true)
     end)
 end
@@ -412,6 +395,14 @@ end
 local Stats = game:GetService("Stats")
 local Players = game:GetService("Players")
 local RunService = game:GetService("RunService")
+local UserInputService = game:GetService("UserInputService")
+local VirtualInputManager = game:GetService("VirtualInputManager")
+local Lighting = game:GetService("Lighting")
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local Workspace = game:GetService("Workspace")
+local LocalPlayer = Players.LocalPlayer
+local PlayerGui = LocalPlayer:WaitForChild("PlayerGui")
+local Camera = workspace.CurrentCamera
 
 local Watermark = Library:AddDraggableLabel("BRUTALSCRIPT")
 
@@ -542,15 +533,6 @@ local TimeBox = Tabs.Visual:AddRightGroupbox("Clock & Ambient", "alarm-clock-che
 local ZoomBox = Tabs.Visual:AddRightGroupbox("Zoom Out", "fullscreen")
 local SettingBox = Tabs.UISettings:AddLeftGroupbox("Menu", "wrench")
 
-local Workspace = game:GetService("Workspace")
-local ReplicatedStorage = game:GetService("ReplicatedStorage")
-local LocalPlayer = Players.LocalPlayer
-local PlayerGui = LocalPlayer:WaitForChild("PlayerGui")
-local Lighting = game:GetService("Lighting")
-local UserInputService = game:GetService("UserInputService")
-local VirtualInputManager = game:GetService("VirtualInputManager")
-local Camera = workspace.CurrentCamera
-
 local CarryEvent = ReplicatedStorage:WaitForChild("Remotes"):WaitForChild("Carry"):WaitForChild("CarrySurvivorEvent")
 local HookEvent = ReplicatedStorage:WaitForChild("Remotes"):WaitForChild("Carry"):WaitForChild("HookEvent")
 local AttackEvent = ReplicatedStorage:WaitForChild("Remotes"):WaitForChild("Attacks"):WaitForChild("BasicAttack")
@@ -576,14 +558,16 @@ local Moonwalk = { Enabled = false, ShowButton = false, SpamSpeed = 30, Intensit
 local MoonwalkConnection = nil
 local MoonwalkButton = nil
 
--- ============== ORBIT 360 CONFIG ==============
-local Orbit360 = {
+-- ============== AUTO CAMERA TURN CONFIG ==============
+local AutoCam = {
     Enabled = false,
-    Radius = 20,
-    OrbitTime = 0.4,
-    Cooldown = 3,
-    LastTrigger = 0,
-    Active = false,
+    Radius = 25,
+    BehindThreshold = -0.1,
+    MaxTurn = 120,
+    Smoothness = 0.08,
+    ReturnSpeed = 0.05,
+    TargetAngle = nil,
+    BaseYaw = nil,
 }
 
 local CameraZoom = { UnlimitedZoom = false, MaxDistance = 1000, MinDistance = 0, FOVEnabled = false, FOV = 70, DefaultFOV = workspace.CurrentCamera.FieldOfView }
@@ -618,85 +602,81 @@ local function getHum()
     return c and c:FindFirstChildOfClass("Humanoid")
 end
 
--- ============== ORBIT 360 FUNCTION ==============
-local function performOrbit360(targetRoot)
-    local myRoot = getRoot()
-    if not myRoot or not targetRoot then return end
-
-    local centerPos = targetRoot.Position
-    local startPos = myRoot.Position
-
-    local toMe = startPos - centerPos
-    local flatToMe = Vector3.new(toMe.X, 0, toMe.Z)
-    local orbitRadius = flatToMe.Magnitude
-    if orbitRadius < 1 then orbitRadius = 3 end
-
-    local startAngle = math.atan2(flatToMe.Z, flatToMe.X)
-    local totalAngle = math.pi * 2
-    local duration = Orbit360.OrbitTime
-    local startTick = tick()
-
-    Orbit360.Active = true
-
-    while tick() - startTick < duration do
-        if not getRoot() or not targetRoot.Parent then break end
-
-        local progress = (tick() - startTick) / duration
-        local currentAngle = startAngle + totalAngle * progress
-
-        local x = centerPos.X + math.cos(currentAngle) * orbitRadius
-        local z = centerPos.Z + math.sin(currentAngle) * orbitRadius
-        local y = startPos.Y
-
-        local targetPos = Vector3.new(x, y, z)
-        myRoot.CFrame = myRoot.CFrame:Lerp(CFrame.new(targetPos), 0.6)
-
-        RunService.RenderStepped:Wait()
-    end
-
-    if getRoot() then
-        getRoot().CFrame = CFrame.new(startPos)
-    end
-
-    Orbit360.Active = false
-end
-
--- ============== ORBIT 360 TRIGGER ==============
+-- ============== AUTO CAMERA TURN LOGIC ==============
 task.spawn(function()
-    while task.wait(0.1) do
-        if not Orbit360.Enabled then continue end
-        if Orbit360.Active then continue end
+    while task.wait(0.03) do
+        if not AutoCam.Enabled then
+            AutoCam.TargetAngle = nil
+            AutoCam.BaseYaw = nil
+            continue
+        end
 
-        local now = tick()
-        if now - Orbit360.LastTrigger < Orbit360.Cooldown then continue end
-
+        local cam = workspace.CurrentCamera
         local myRoot = getRoot()
-        if not myRoot then continue end
+        if not cam or not myRoot then continue end
+
+        local look = cam.CFrame.LookVector
+        local currentYaw = math.atan2(look.X, look.Z)
+
+        if not AutoCam.BaseYaw then
+            AutoCam.BaseYaw = currentYaw
+        end
+
+        local mouseDelta = UserInputService:GetMouseDelta()
+        if mouseDelta.Magnitude > 1 then
+            AutoCam.BaseYaw = currentYaw
+        end
 
         local targetRoot = nil
-        local shortest = Orbit360.Radius
+        local shortest = AutoCam.Radius
 
         for _, plr in ipairs(Players:GetPlayers()) do
             if plr ~= LocalPlayer and plr.Character then
                 local hrp = plr.Character:FindFirstChild("HumanoidRootPart")
                 local hum = plr.Character:FindFirstChildOfClass("Humanoid")
-
                 if hrp and hum and hum.Health > 0 then
                     local dist = (hrp.Position - myRoot.Position).Magnitude
                     if dist < shortest then
-                        shortest = dist
-                        targetRoot = hrp
+                        local dirTo = (hrp.Position - myRoot.Position).Unit
+                        local flatDir = Vector3.new(dirTo.X, 0, dirTo.Z)
+                        if flatDir.Magnitude > 0 then
+                            flatDir = flatDir.Unit
+                            local flatLook = Vector3.new(myRoot.CFrame.LookVector.X, 0, myRoot.CFrame.LookVector.Z).Unit
+                            local dot = flatLook:Dot(flatDir)
+                            if dot < AutoCam.BehindThreshold then
+                                shortest = dist
+                                targetRoot = hrp
+                            end
+                        end
                     end
                 end
             end
         end
 
+        local desiredYaw
+
         if targetRoot then
-            Orbit360.LastTrigger = now
-            task.spawn(function()
-                performOrbit360(targetRoot)
-            end)
+            local dirTo = targetRoot.Position - myRoot.Position
+            local flatDir = Vector3.new(dirTo.X, 0, dirTo.Z).Unit
+            local targetYaw = math.atan2(flatDir.X, flatDir.Z)
+
+            local delta = targetYaw - AutoCam.BaseYaw
+            while delta > math.pi do delta -= math.pi * 2 end
+            while delta < -math.pi do delta += math.pi * 2 end
+
+            local turnAngle = math.clamp(delta, 0, math.rad(AutoCam.MaxTurn))
+            desiredYaw = AutoCam.BaseYaw + turnAngle
+        else
+            desiredYaw = AutoCam.BaseYaw
         end
+
+        AutoCam.TargetAngle = desiredYaw
+
+        local camPos = cam.CFrame.Position
+        local lookAt = camPos + Vector3.new(math.sin(desiredYaw), 0, math.cos(desiredYaw))
+        local targetCF = CFrame.new(camPos, lookAt)
+
+        cam.CFrame = cam.CFrame:Lerp(targetCF, AutoCam.Smoothness)
     end
 end)
 
@@ -775,7 +755,8 @@ local function shouldDisableWalkSpeed()
         hum.Health <= 0 or hum.Health < 2
         or char:GetAttribute("Downed") == true
         or char:GetAttribute("IsDown") == true
-        or char:GetAttribute("Knocked") == true    ) then
+        or char:GetAttribute("Knocked") == true
+    ) then
         return true
     end
     return false
@@ -790,7 +771,6 @@ local function applyWalkSpeed()
     end
     WalkSpeedConnection = RunService.Heartbeat:Connect(function()
         if not Movement.WalkSpeedEnabled then return end
-        if Orbit360.Active then return end
         local hum = getHum()
         if not hum then return end
         if shouldDisableWalkSpeed() then return end
@@ -857,17 +837,13 @@ local function applyGodMode()
     local hum = getHum()
     if not hum then return end
     if hum.Health < hum.MaxHealth then
-        pcall(function()
-            hum.Health = hum.MaxHealth
-        end)
+        pcall(function() hum.Health = hum.MaxHealth end)
     end
     local state = hum:GetState()
     if state == Enum.HumanoidStateType.Dead
         or state == Enum.HumanoidStateType.FallingDown
         or state == Enum.HumanoidStateType.Ragdoll then
-        pcall(function()
-            hum:ChangeState(Enum.HumanoidStateType.Running)
-        end)
+        pcall(function() hum:ChangeState(Enum.HumanoidStateType.Running) end)
     end
 end
 
@@ -1509,9 +1485,6 @@ local function createMoonwalkButton()
         local hum = getHum()
         if Moonwalk.Enabled then
             stroke.Color = Color3.fromRGB(180, 80, 255)
-            if not MoonwalkConnection then
-                startMoonwalk()
-            end
         else
             stroke.Color = Color3.fromRGB(255, 255, 255)
             if hum then
@@ -2181,7 +2154,7 @@ RunService.Heartbeat:Connect(function()
                 end
             end
         end
-        if Movement.WalkSpeedEnabled and not Moonwalk.Enabled and not Orbit360.Active then
+        if Movement.WalkSpeedEnabled and not Moonwalk.Enabled then
             local hum = getHum()
             if hum then
                 if shouldDisableWalkSpeed() then
@@ -2604,37 +2577,42 @@ AbilityTab:AddButton({
 
 AbilityTab:AddDivider()
 
-AbilityTab:AddCheckbox("Orbit360Enable", {
-    Text = "Orbit 360 (around target)",
+AbilityTab:AddCheckbox("AutoCamEnable", {
+    Text = "Auto Camera Turn (behind)",
     Default = false,
-    Callback = function(v) Orbit360.Enabled = v end
+    Callback = function(v) AutoCam.Enabled = v end
 })
-
-AbilityTab:AddSlider("Orbit360Radius", {
+AbilityTab:AddSlider("AutoCamRadius", {
     Text = "Trigger Radius",
-    Default = 20,
+    Default = 25,
     Min = 5,
-    Max = 50,
+    Max = 100,
     Rounding = 0,
-    Callback = function(v) Orbit360.Radius = v end
+    Callback = function(v) AutoCam.Radius = v end
 })
-
-AbilityTab:AddSlider("Orbit360Time", {
-    Text = "Orbit Duration (s)",
-    Default = 0.4,
-    Min = 0.15,
-    Max = 2,
+AbilityTab:AddSlider("AutoCamMaxTurn", {
+    Text = "Max Turn (deg)",
+    Default = 120,
+    Min = 20,
+    Max = 180,
+    Rounding = 0,
+    Callback = function(v) AutoCam.MaxTurn = v end
+})
+AbilityTab:AddSlider("AutoCamSmoothness", {
+    Text = "Smoothness",
+    Default = 0.08,
+    Min = 0.02,
+    Max = 0.3,
     Rounding = 2,
-    Callback = function(v) Orbit360.OrbitTime = v end
+    Callback = function(v) AutoCam.Smoothness = v end
 })
-
-AbilityTab:AddSlider("Orbit360Cooldown", {
-    Text = "Cooldown",
-    Default = 3,
-    Min = 0.5,
-    Max = 10,
-    Rounding = 1,
-    Callback = function(v) Orbit360.Cooldown = v end
+AbilityTab:AddSlider("AutoCamBehind", {
+    Text = "Behind Threshold",
+    Default = -0.1,
+    Min = -1,
+    Max = 0,
+    Rounding = 2,
+    Callback = function(v) AutoCam.BehindThreshold = v end
 })
 
 KillerTab:AddCheckbox("AutoStalk", {
@@ -3044,7 +3022,6 @@ end)
 
 ThemeManager:SetLibrary(Library)
 SaveManager:SetLibrary(Library)
-SaveManager:IgnoreThemeSettings()
 SaveManager:IgnoreThemeSettings()
 SaveManager:SetIgnoreIndexes({})
 ThemeManager:SetFolder("BRUTALSCRIPT")
