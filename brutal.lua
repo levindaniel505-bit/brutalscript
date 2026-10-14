@@ -558,16 +558,15 @@ local Moonwalk = { Enabled = false, ShowButton = false, SpamSpeed = 30, Intensit
 local MoonwalkConnection = nil
 local MoonwalkButton = nil
 
--- ============== AUTO CAMERA TURN CONFIG ==============
+-- ============== AUTO CAMERA AIM CONFIG ==============
 local AutoCam = {
     Enabled = false,
     Radius = 25,
     BehindThreshold = -0.1,
-    MaxTurn = 120,
-    Smoothness = 0.08,
-    ReturnSpeed = 0.05,
-    TargetAngle = nil,
-    BaseYaw = nil,
+    MaxTurn = 180,
+    Smoothness = 0.15,
+    TargetRoot = nil,
+    HoldTarget = true,
 }
 
 local CameraZoom = { UnlimitedZoom = false, MaxDistance = 1000, MinDistance = 0, FOVEnabled = false, FOV = 70, DefaultFOV = workspace.CurrentCamera.FieldOfView }
@@ -602,12 +601,14 @@ local function getHum()
     return c and c:FindFirstChildOfClass("Humanoid")
 end
 
--- ============== AUTO CAMERA TURN LOGIC ==============
+-- ============== AUTO CAMERA AIM LOGIC ==============
+-- Логика: камера наводится на цель сзади и ДЕРЖИТ её как аимбот,
+-- пока цель в радиусе. Когда цель уходит — камера остаётся где была,
+-- пока игрок сам не поведёт мышью.
 task.spawn(function()
-    while task.wait(0.03) do
+    while task.wait(0.02) do
         if not AutoCam.Enabled then
-            AutoCam.TargetAngle = nil
-            AutoCam.BaseYaw = nil
+            AutoCam.TargetRoot = nil
             continue
         end
 
@@ -615,37 +616,40 @@ task.spawn(function()
         local myRoot = getRoot()
         if not cam or not myRoot then continue end
 
-        local look = cam.CFrame.LookVector
-        local currentYaw = math.atan2(look.X, look.Z)
-
-        if not AutoCam.BaseYaw then
-            AutoCam.BaseYaw = currentYaw
+        -- Если уже есть цель — проверяем, всё ещё валидна ли она
+        if AutoCam.TargetRoot then
+            local tr = AutoCam.TargetRoot
+            if not tr.Parent then
+                AutoCam.TargetRoot = nil
+            else
+                local hum = tr.Parent:FindFirstChildOfClass("Humanoid")
+                local dist = (tr.Position - myRoot.Position).Magnitude
+                if not hum or hum.Health <= 0 or dist > AutoCam.Radius * 1.5 then
+                    AutoCam.TargetRoot = nil
+                end
+            end
         end
 
-        local mouseDelta = UserInputService:GetMouseDelta()
-        if mouseDelta.Magnitude > 1 then
-            AutoCam.BaseYaw = currentYaw
-        end
-
-        local targetRoot = nil
-        local shortest = AutoCam.Radius
-
-        for _, plr in ipairs(Players:GetPlayers()) do
-            if plr ~= LocalPlayer and plr.Character then
-                local hrp = plr.Character:FindFirstChild("HumanoidRootPart")
-                local hum = plr.Character:FindFirstChildOfClass("Humanoid")
-                if hrp and hum and hum.Health > 0 then
-                    local dist = (hrp.Position - myRoot.Position).Magnitude
-                    if dist < shortest then
-                        local dirTo = (hrp.Position - myRoot.Position).Unit
-                        local flatDir = Vector3.new(dirTo.X, 0, dirTo.Z)
-                        if flatDir.Magnitude > 0 then
-                            flatDir = flatDir.Unit
-                            local flatLook = Vector3.new(myRoot.CFrame.LookVector.X, 0, myRoot.CFrame.LookVector.Z).Unit
-                            local dot = flatLook:Dot(flatDir)
-                            if dot < AutoCam.BehindThreshold then
-                                shortest = dist
-                                targetRoot = hrp
+        -- Если цели нет — ищем новую (только среди тех, кто сзади)
+        if not AutoCam.TargetRoot then
+            local shortest = AutoCam.Radius
+            for _, plr in ipairs(Players:GetPlayers()) do
+                if plr ~= LocalPlayer and plr.Character then
+                    local hrp = plr.Character:FindFirstChild("HumanoidRootPart")
+                    local hum = plr.Character:FindFirstChildOfClass("Humanoid")
+                    if hrp and hum and hum.Health > 0 then
+                        local dist = (hrp.Position - myRoot.Position).Magnitude
+                        if dist < shortest then
+                            local dirTo = (hrp.Position - myRoot.Position).Unit
+                            local flatDir = Vector3.new(dirTo.X, 0, dirTo.Z)
+                            if flatDir.Magnitude > 0 then
+                                flatDir = flatDir.Unit
+                                local flatLook = Vector3.new(myRoot.CFrame.LookVector.X, 0, myRoot.CFrame.LookVector.Z).Unit
+                                local dot = flatLook:Dot(flatDir)
+                                if dot < AutoCam.BehindThreshold then
+                                    shortest = dist
+                                    AutoCam.TargetRoot = hrp
+                                end
                             end
                         end
                     end
@@ -653,30 +657,14 @@ task.spawn(function()
             end
         end
 
-        local desiredYaw
-
-        if targetRoot then
-            local dirTo = targetRoot.Position - myRoot.Position
-            local flatDir = Vector3.new(dirTo.X, 0, dirTo.Z).Unit
-            local targetYaw = math.atan2(flatDir.X, flatDir.Z)
-
-            local delta = targetYaw - AutoCam.BaseYaw
-            while delta > math.pi do delta -= math.pi * 2 end
-            while delta < -math.pi do delta += math.pi * 2 end
-
-            local turnAngle = math.clamp(delta, 0, math.rad(AutoCam.MaxTurn))
-            desiredYaw = AutoCam.BaseYaw + turnAngle
-        else
-            desiredYaw = AutoCam.BaseYaw
+        -- Ведём камеру на цель
+        if AutoCam.TargetRoot then
+            local camPos = cam.CFrame.Position
+            local targetPos = AutoCam.TargetRoot.Position
+            local lookAt = Vector3.new(targetPos.X, camPos.Y, targetPos.Z)
+            local targetCF = CFrame.new(camPos, lookAt)
+            cam.CFrame = cam.CFrame:Lerp(targetCF, AutoCam.Smoothness)
         end
-
-        AutoCam.TargetAngle = desiredYaw
-
-        local camPos = cam.CFrame.Position
-        local lookAt = camPos + Vector3.new(math.sin(desiredYaw), 0, math.cos(desiredYaw))
-        local targetCF = CFrame.new(camPos, lookAt)
-
-        cam.CFrame = cam.CFrame:Lerp(targetCF, AutoCam.Smoothness)
     end
 end)
 
@@ -2578,7 +2566,7 @@ AbilityTab:AddButton({
 AbilityTab:AddDivider()
 
 AbilityTab:AddCheckbox("AutoCamEnable", {
-    Text = "Auto Camera Turn (behind)",
+    Text = "Auto Camera Aim (behind)",
     Default = false,
     Callback = function(v) AutoCam.Enabled = v end
 })
@@ -2590,19 +2578,11 @@ AbilityTab:AddSlider("AutoCamRadius", {
     Rounding = 0,
     Callback = function(v) AutoCam.Radius = v end
 })
-AbilityTab:AddSlider("AutoCamMaxTurn", {
-    Text = "Max Turn (deg)",
-    Default = 120,
-    Min = 20,
-    Max = 180,
-    Rounding = 0,
-    Callback = function(v) AutoCam.MaxTurn = v end
-})
 AbilityTab:AddSlider("AutoCamSmoothness", {
     Text = "Smoothness",
-    Default = 0.08,
+    Default = 0.15,
     Min = 0.02,
-    Max = 0.3,
+    Max = 0.5,
     Rounding = 2,
     Callback = function(v) AutoCam.Smoothness = v end
 })
