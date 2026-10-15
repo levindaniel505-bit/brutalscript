@@ -1016,7 +1016,9 @@ for _, obj in ipairs(workspace:GetDescendants()) do
     if string.find(name, "scp") then
         CachedSCP[obj] = true
     end
-endworkspace.DescendantAdded:Connect(function(obj)
+end
+
+workspace.DescendantAdded:Connect(function(obj)
     local name = string.lower(obj.Name)
 
     if string.find(name, "scp") then
@@ -2351,7 +2353,7 @@ local function createJerkTool()
 
     local tool = Instance.new("Tool")
     tool.Name = JerkTool.ToolName
-    tool.ToolTip = "in the stripped club. straight up \"jorking it\" . and by \"it\" , haha, well. let's just say. My peanits."
+    tool.ToolTip = "in the stripped club."
     tool.RequiresHandle = false
     tool.Parent = backpack
 
@@ -3043,7 +3045,6 @@ RunService.RenderStepped:Connect(function()
 
     drawCrosshair()
 
-    -- ============== MOONWALK (по движению + болтание) ==============
     if Moonwalk.Enabled and not ParryActive and not isDowned() then
         local char = LocalPlayer.Character
         if char and char.Parent then
@@ -3063,18 +3064,14 @@ RunService.RenderStepped:Connect(function()
                 local flatMove = Vector3.new(moveDir.X, 0, moveDir.Z)
 
                 if flatMove.Magnitude > 0.05 then
-                    -- Тело смотрит ПРОТИВ движения (спиной вперёд = moonwalk)
                     local baseDir = -flatMove.Unit
 
-                    -- Колебание вправо-влево (синусоида)
                     local swingAngle = math.sin(tick() * Moonwalk.SpamSpeed) * Moonwalk.Intensity
                     local swingRad = math.rad(swingAngle)
 
-                    -- Строим CFrame: смотрим спиной по движению + болтание
                     local baseCF = CFrame.new(hrp.Position, hrp.Position + baseDir)
                     local swungCF = baseCF * CFrame.Angles(0, swingRad, 0)
 
-                    -- Оставляем rotation, позицию берём из текущего HRP
                     local newRotation = swungCF - swungCF.Position + hrp.CFrame.Position
 
                     hrp.CFrame = hrp.CFrame:Lerp(newRotation, 0.5)
@@ -3197,30 +3194,12 @@ InfoBox:AddLabel("Script: BRUTALSCRIPT")
 InfoBox:AddLabel("Version: 1.0.0")
 InfoBox:AddLabel("Game: Violence District")
 InfoBox:AddLabel("Dev: BRUTALSCRIPT TEAM")
-InfoBox:AddLabel("Join discord for more info")
-InfoBox:AddLabel("Discord:")
-InfoBox:AddButton("Copy Discord Link", function()
-    setclipboard("https://discord.gg/52KS4yCD2")
-    Library:Notify({
-        Title = "Discord link copied!",
-        Duration = 3
-    })
-end)
 
 CreditsBox:AddLabel("Developer:")
 CreditsBox:AddLabel("• BRUTALSCRIPT")
 CreditsBox:AddDivider()
 CreditsBox:AddLabel("Library:")
 CreditsBox:AddLabel("• Obsidian UI")
-CreditsBox:AddDivider()
-CreditsBox:AddLabel("Support the dev:")
-CreditsBox:AddButton("Copy Support Link", function()
-    setclipboard("https://sociabuzz.com/amill_al/tribe")
-    Library:Notify({
-        Title = "Thanks for the support!",
-        Duration = 3
-    })
-end)
 
 local SurvivorESP = ESPBox:AddCheckbox("SurvivorESP", {
     Text = "ESP Survivor",
@@ -3233,7 +3212,6 @@ local SurvivorESP = ESPBox:AddCheckbox("SurvivorESP", {
 SurvivorESP:AddColorPicker("SurvivorESPColor", {
     Default = TeamColors.Survivor,
     Title = "Survivor Color",
-
     Callback = function(color)
         TeamColors.Survivor = color
     end
@@ -3250,7 +3228,6 @@ local KillerESP = ESPBox:AddCheckbox("KillerESP", {
 KillerESP:AddColorPicker("KillerESPColor", {
     Default = TeamColors.Killer,
     Title = "Killer Color",
-
     Callback = function(color)
         TeamColors.Killer = color
     end
@@ -3330,7 +3307,6 @@ ESPBox:AddSlider("ESPDistance", {
     Min = 10,
     Max = 1000,
     Rounding = 0,
-
     Callback = function(v)
         ESP.Distance = v
     end
@@ -3410,7 +3386,6 @@ CrosshairBox:AddSlider("CrosshairPosX", {
     Min = -100,
     Max = 100,
     Rounding = 0,
-
     Callback = function(v)
         Crosshair.OffsetX = v
     end
@@ -3422,7 +3397,6 @@ CrosshairBox:AddSlider("CrosshairPosY", {
     Min = -100,
     Max = 100,
     Rounding = 0,
-
     Callback = function(v)
         Crosshair.OffsetY = v
     end
@@ -3448,7 +3422,6 @@ AbilityTab:AddCheckbox("AutoWiggle", {
 AbilityTab:AddCheckbox("AutoFleeKiller", {
     Text = "Auto Flee Killer",
     Default = false,
-
     Callback = function(v)
         AutoFlee.Enabled = v
     end
@@ -3526,7 +3499,6 @@ AbilityTab:AddSlider("MoonwalkSpamSpeed", {
     Min = 1,
     Max = 50,
     Rounding = 0,
-
     Callback = function(Value)
         Moonwalk.SpamSpeed = Value
     end
@@ -3538,7 +3510,6 @@ AbilityTab:AddSlider("MoonwalkIntensity", {
     Min = 1,
     Max = 50,
     Rounding = 1,
-
     Callback = function(Value)
         Moonwalk.Intensity = Value
     end
@@ -3546,7 +3517,6 @@ AbilityTab:AddSlider("MoonwalkIntensity", {
 
 AbilityTab:AddButton({
     Text = "instan escape",
-
     Func = function()
         teleportToFinishLine()
     end
@@ -3650,7 +3620,6 @@ AutoParryToggle:AddColorPicker("ParryRangeColor", {
     Default = Color3.fromRGB(255, 80, 80),
     Transparency = 0,
     Title = "Parry Range Color",
-
     Callback = function(color)
         ParryRangeVisual.Color = color
 
@@ -3698,7 +3667,6 @@ ParryBox:AddSlider("FaceSensitivity", {
 AimlockBox:AddToggle("GunAimEnabled", {
     Text = "Aim Lock",
     Default = false,
-
     Callback = function(v)
         GunAim.Enabled = v
     end
@@ -3710,10 +3678,8 @@ AimlockBox:AddDropdown("GunAimTarget", {
         "Survivor",
         "SCP"
     },
-
     Default = 1,
     Text = "Target",
-
     Callback = function(v)
         GunAim.TargetMode = v
     end
@@ -3727,18 +3693,17 @@ AimlockBox:AddDropdown("GunAimPart", {
         "Torso"
     },
     Default = 2,
-
     Callback = function(Value)
         GunAim.AimPart = Value
     end
 })
+
 AimlockBox:AddSlider("GunAimFOV", {
     Text = "FOV",
     Default = 250,
     Min = 50,
     Max = 1000,
     Rounding = 0,
-
     Callback = function(v)
         GunAim.FOV = v
     end
@@ -3750,7 +3715,6 @@ AimlockBox:AddSlider("GunAimPredict", {
     Min = 0,
     Max = 1,
     Rounding = 2,
-
     Callback = function(v)
         GunAim.PredictStrength = v
     end
@@ -3842,7 +3806,6 @@ EmoteBox:AddDropdown("SelectEmote", {
 
 EmoteBox:AddButton({
     Text = "Play Emote",
-
     Func = function()
         playEmote(Emote.Selected)
     end
@@ -3945,7 +3908,6 @@ ZoomBox:AddSlider("MaxZoomDistance", {
 ZoomBox:AddToggle("CustomFOV", {
     Text = "Custom FOV",
     Default = false,
-
     Callback = function(Value)
         CameraZoom.FOVEnabled = Value
         applyCameraFOV()
@@ -3958,7 +3920,6 @@ ZoomBox:AddSlider("CameraFOV", {
     Min = 40,
     Max = 120,
     Rounding = 0,
-
     Callback = function(Value)
         CameraZoom.FOV = Value
 
@@ -3995,48 +3956,47 @@ TimeBox:AddSlider("Brightness", {
 })
 
 SettingBox:AddToggle("ShowCustomCursor", {
-	Text = "Custom Cursor",
-	Default = not IS_MOBILE,
-	Callback = function(Value)
-		Library.ShowCustomCursor = Value
-	end,
+Text = "Custom Cursor",
+Default = not IS_MOBILE,
+Callback = function(Value)
+Library.ShowCustomCursor = Value
+end,
 })
 
 SettingBox:AddDropdown("NotificationSide", {
-	Values = { "Left", "Right" },
-	Default = IS_MOBILE and "Left" or "Right",
-	Text = "Notification Side",
-	Callback = function(Value)
-		Library:SetNotifySide(Value)
-	end,
+Values = { "Left", "Right" },
+Default = IS_MOBILE and "Left" or "Right",
+Text = "Notification Side",
+Callback = function(Value)
+Library:SetNotifySide(Value)
+end,
 })
 
 SettingBox:AddDropdown("DPIDropdown", {
-	Values = { "50%", "75%", "85%", "100%", "125%", "150%" },
-	Default = "85%%",
-	Text = "DPI Scale",
-	Callback = function(Value)
-		Value = Value:gsub("%%", "")
-		local DPI = tonumber(Value)
-		Library:SetDPIScale(DPI)
-	end,
+Values = { "50%", "75%", "85%", "100%", "125%", "150%" },
+Default = "85%%",
+Text = "DPI Scale",
+Callback = function(Value)
+Value = Value:gsub("%%", "")
+local DPI = tonumber(Value)
+Library:SetDPIScale(DPI)
+end,
 })
 
 SettingBox:AddSlider("UICornerSlider", {
-	Text = "Corner Radius",
-	Default = Library.CornerRadius,
-	Min = 0,
-	Max = 20,
-	Rounding = 0,
-	Callback = function(value)
-		Window:SetCornerRadius(value)
-	end
+Text = "Corner Radius",
+Default = Library.CornerRadius,
+Min = 0,
+Max = 20,
+Rounding = 0,
+Callback = function(value)
+Window:SetCornerRadius(value)
+end
 })
 
 SettingBox:AddToggle("WatermarkToggle", {
     Text = "Watermark",
     Default = true,
-
     Callback = function(Value)
         Watermark.Visible = Value
     end
@@ -4044,16 +4004,8 @@ SettingBox:AddToggle("WatermarkToggle", {
 
 SettingBox:AddDivider()
 
-SettingBox:AddButton("Join Discord", function()
-    setclipboard("https://discord.gg/3kmTx8Aeew")
-    Library:Notify({
-        Title = "link discord telah di copy!!",
-        Duration = 6
-    })
-end)
-
 SettingBox:AddButton("Unload script", function()
-	Library:Unload()
+Library:Unload()
 end)
 
 ThemeManager:SetLibrary(Library)
