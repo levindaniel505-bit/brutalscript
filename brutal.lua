@@ -486,7 +486,7 @@ local ParryActive = false
 local Moonwalk = { Enabled = false, ShowButton = false, SpamSpeed = 30, Intensity = 35, SlowSpeed = 20, UseSlow = true }
 local MoonwalkButton = nil
 
--- ============== EVADE ==============
+-- ============== EVADE (движение, не телепорт) ==============
 local Evade = {
     Enabled = false,
     Radius = 15,
@@ -501,7 +501,6 @@ local Evade = {
     Mode = "Behind",
     BehindDistance = 3,
     OffsetSide = 0,
-    Teleport = true,
     LookAtKiller = true,
     UseRaycast = true,
     DodgeAttack = true,
@@ -514,6 +513,7 @@ local Evade = {
     PredictAim = true,
     LastDodgeSide = 1,
     LastDodgeTime = 0,
+    DodgeSpeed = 55,
 }
 
 local CameraZoom = { UnlimitedZoom = false, MaxDistance = 1000, MinDistance = 0, FOVEnabled = false, FOV = 70, DefaultFOV = workspace.CurrentCamera.FieldOfView }
@@ -572,46 +572,65 @@ local function findFreeDirection(originPos, baseDir, distance)
         local candidate = originPos + dir * distance
         candidate = Vector3.new(candidate.X, originPos.Y, candidate.Z)
         if isPointFree(candidate) then
-            return candidate
+            return dir
         end
     end
-    return originPos
+    return baseDir
 end
 
+-- РЕАЛЬНАЯ ходьба через Humanoid:Move
 local function moveToPoint(targetPos, killerRoot, lookAt)
     local myRoot = getRoot()
     local hum = getHum()
     if not myRoot or not hum or not targetPos then return end
 
-    if Evade.Teleport then
-        if lookAt and killerRoot then
-            local look = killerRoot.Position - targetPos
-            look = Vector3.new(look.X, 0, look.Z)
-            if look.Magnitude > 0.01 then
-                myRoot.CFrame = CFrame.new(targetPos, targetPos + look.Unit)
-                return
-            end
+    local startPos = myRoot.Position
+    local direction = targetPos - startPos
+    direction = Vector3.new(direction.X, 0, direction.Z)
+    local distance = direction.Magnitude
+    if distance < 0.1 then return end
+    direction = direction.Unit
+
+    local origWalkSpeed = hum.WalkSpeed
+    local origAutoRotate = hum.AutoRotate
+
+    -- Скорость подбираем динамически
+    local dodgeSpeed = math.clamp(distance / 0.2, 30, Evade.DodgeSpeed)
+    hum.WalkSpeed = dodgeSpeed
+
+    -- Разворот
+    if lookAt and killerRoot then
+        hum.AutoRotate = false
+        local look = killerRoot.Position - startPos
+        look = Vector3.new(look.X, 0, look.Z)
+        if look.Magnitude > 0.01 then
+            myRoot.CFrame = CFrame.new(startPos, startPos + look.Unit)
         end
-        myRoot.CFrame = CFrame.new(targetPos)
     else
-        local startPos = myRoot.Position
-        local dur = math.min(Evade.Duration, 0.25)
-        local startTick = tick()
-        while tick() - startTick < dur do
-            if not myRoot.Parent then break end
-            local alpha = (tick() - startTick) / dur
-            local eased = 1 - (1 - alpha) * (1 - alpha)
-            local cur = startPos:Lerp(targetPos, eased)
-            local cf
-            if lookAt and killerRoot then
-                local look = killerRoot.Position - cur
-                look = Vector3.new(look.X, 0, look.Z)
-                cf = look.Magnitude > 0.01 and CFrame.new(cur, cur + look.Unit) or CFrame.new(cur)
-            else
-                cf = CFrame.new(cur)
-            end
-            myRoot.CFrame = cf
-            RunService.RenderStepped:Wait()
+        hum.AutoRotate = false
+        myRoot.CFrame = CFrame.new(startPos, startPos + direction)
+    end
+
+    -- Идём к цели настоящей ходьбой
+    local startTick = tick()
+    local timeout = 0.3
+    while tick() - startTick < timeout do
+        if not myRoot.Parent or not hum.Parent then break end
+        local cur = myRoot.Position
+        local rem = Vector3.new(targetPos.X - cur.X, 0, targetPos.Z - cur.Z)
+        if rem.Magnitude < 0.4 then break end
+        hum:Move(rem.Unit)
+        RunService.RenderStepped:Wait()
+    end
+    hum:Move(Vector3.zero)
+
+    task.wait(0.05)
+    if hum and hum.Parent then
+        hum.AutoRotate = origAutoRotate
+        if Movement.WalkSpeedEnabled then
+            hum.WalkSpeed = Movement.WalkSpeedValue
+        else
+            hum.WalkSpeed = origWalkSpeed
         end
     end
 end
@@ -634,6 +653,7 @@ local function performAttackDodge(killerRoot, killerChar)
 
     local right = Vector3.new(-flatToKiller.Z, 0, flatToKiller.X)
 
+    -- Определяем сторону удара
     local sideSign = 0
     if killerChar then
         local hum2 = killerChar:FindFirstChildOfClass("Humanoid")
@@ -692,13 +712,13 @@ local function performAttackDodge(killerRoot, killerChar)
     targetPos = Vector3.new(targetPos.X, myPos.Y, targetPos.Z)
 
     if not isPointFree(targetPos) then
-        targetPos = findFreeDirection(myPos, dodgeDir, Evade.DodgeDistance)
+        dodgeDir = findFreeDirection(myPos, dodgeDir, Evade.DodgeDistance)
+        targetPos = myPos + dodgeDir * Evade.DodgeDistance
+        targetPos = Vector3.new(targetPos.X, myPos.Y, targetPos.Z)
     end
 
     moveToPoint(targetPos, killerRoot, Evade.LookAtKiller)
 
-    hum:Move(Vector3.zero)
-    task.wait(0.05)
     Evade.Active = false
 end
 
@@ -726,35 +746,28 @@ local function detectAttackSide(killerRoot)
     return nil
 end
 
-local function getBehindPoint(killerRoot, sideOverride)
-    local myRoot = getRoot()
-    if not myRoot or not killerRoot then return nil end
-    local killerLook = killerRoot.CFrame.LookVector
-    local flatLook = Vector3.new(killerLook.X, 0, killerLook.Z)
-    if flatLook.Magnitude < 0.01 then flatLook = Vector3.new(0, 0, -1) end
-    flatLook = flatLook.Unit
-    local flatRight = Vector3.new(-flatLook.Z, 0, flatLook.X)
-    local sideOffset = sideOverride or Evade.OffsetSide
-    local basePos = killerRoot.Position - flatLook * Evade.BehindDistance + flatRight * sideOffset
-    local targetPos = Vector3.new(basePos.X, myRoot.Position.Y, basePos.Z)
-    if not isPointFree(targetPos) then
-        local fallback = killerRoot.Position - flatLook * (Evade.BehindDistance * 0.5)
-        targetPos = Vector3.new(fallback.X, myRoot.Position.Y, fallback.Z)
-        if not isPointFree(targetPos) then return nil end
-    end
-    return targetPos
-end
-
 local function performEvadeBehind(killerRoot, sideOverride)
     local myRoot = getRoot()
     local hum = getHum()
     if not myRoot or not hum or not killerRoot then return end
-    local targetPos = getBehindPoint(killerRoot, sideOverride)
-    if not targetPos then return end
+
     Evade.Active = true
+
+    local toKiller = killerRoot.Position - myRoot.Position
+    local flatToKiller = Vector3.new(toKiller.X, 0, toKiller.Z)
+    if flatToKiller.Magnitude < 0.01 then flatToKiller = Vector3.new(0, 0, -1) end
+    flatToKiller = flatToKiller.Unit
+
+    local right = Vector3.new(-flatToKiller.Z, 0, flatToKiller.X)
+    local sideOffset = sideOverride or Evade.OffsetSide
+    local moveDir = (flatToKiller + right * sideOffset * 0.5).Unit
+
+    -- Идём мимо киллера вперёд (окажемся сзади)
+    local targetPos = myRoot.Position + moveDir * (Evade.BehindDistance + 5)
+    targetPos = Vector3.new(targetPos.X, myRoot.Position.Y, targetPos.Z)
+
     moveToPoint(targetPos, killerRoot, Evade.LookAtKiller)
-    hum:Move(Vector3.zero)
-    task.wait(0.05)
+
     Evade.Active = false
 end
 
@@ -762,6 +775,7 @@ local function performEvadeArc(killerRoot)
     local myRoot = getRoot()
     local hum = getHum()
     if not myRoot or not hum or not killerRoot then return end
+
     local center = Vector3.new(killerRoot.Position.X, myRoot.Position.Y, killerRoot.Position.Z)
     local startPos = myRoot.Position
     local toMe = startPos - center
@@ -772,7 +786,11 @@ local function performEvadeArc(killerRoot)
     local totalAngle = math.rad(Evade.Angle) * Evade.Direction
     local duration = Evade.Duration
     local startTick = tick()
+
     Evade.Active = true
+    local origSpeed = hum.WalkSpeed
+    hum.WalkSpeed = Evade.DodgeSpeed
+
     while tick() - startTick < duration do
         if not myRoot.Parent or not killerRoot.Parent then break end
         local progress = (tick() - startTick) / duration
@@ -785,6 +803,8 @@ local function performEvadeArc(killerRoot)
         RunService.RenderStepped:Wait()
     end
     hum:Move(Vector3.zero)
+    task.wait(0.05)
+    if hum and hum.Parent then hum.WalkSpeed = origSpeed end
     Evade.Active = false
 end
 
@@ -796,6 +816,7 @@ local function performEvade(killerRoot, sideOverride)
     end
 end
 
+-- Цикл: подход киллера
 task.spawn(function()
     while task.wait(0.05) do
         if not Evade.Enabled or Evade.Active then continue end
@@ -934,6 +955,7 @@ local function applyWalkSpeed()
     if WalkSpeedConnection then WalkSpeedConnection:Disconnect() WalkSpeedConnection = nil end
     WalkSpeedConnection = RunService.Heartbeat:Connect(function()
         if not Movement.WalkSpeedEnabled then return end
+        if Evade.Active then return end
         local hum = getHum()
         if not hum then return end
         if shouldDisableWalkSpeed() then return end
@@ -2188,10 +2210,7 @@ ESPWindowToggle:AddColorPicker("WindowColor", {
 
 ESPBox:AddSlider("ESPDistance", {
     Text = "ESP Radius",
-    Default = 100,
-    Min = 10,
-    Max = 1000,
-    Rounding = 0,
+    Default = 100, Min = 10, Max = 1000, Rounding = 0,
     Callback = function(v) ESP.Distance = v end
 })
 
@@ -2217,10 +2236,7 @@ ESPStatusBox:AddCheckbox("ShowHealth", {
 })
 ESPStatusBox:AddSlider("StatusRadius", {
     Text = "Status Radius",
-    Default = 100,
-    Min = 20,
-    Max = 500,
-    Rounding = 0,
+    Default = 100, Min = 20, Max = 500, Rounding = 0,
     Callback = function(v) ESPStatus.Radius = v end
 })
 
@@ -2238,19 +2254,15 @@ CrosshairToggle:AddColorPicker("CrosshairColor", {
 })
 CrosshairBox:AddDropdown("Style", {
     Values = {"Plus","Dot","Circle"},
-    Default = 1,
-    Multi = false,
-    Text = "Style",
+    Default = 1, Multi = false, Text = "Style",
     Callback = function(v) Crosshair.Style = v end
 })
 CrosshairBox:AddSlider("CrosshairPosX", {
-    Text = "Position X",
-    Default = 0, Min = -100, Max = 100, Rounding = 0,
+    Text = "Position X", Default = 0, Min = -100, Max = 100, Rounding = 0,
     Callback = function(v) Crosshair.OffsetX = v end
 })
 CrosshairBox:AddSlider("CrosshairPosY", {
-    Text = "Position Y",
-    Default = 0, Min = -100, Max = 100, Rounding = 0,
+    Text = "Position Y", Default = 0, Min = -100, Max = 100, Rounding = 0,
     Callback = function(v) Crosshair.OffsetY = v end
 })
 
@@ -2358,8 +2370,7 @@ AbilityTab:AddToggle("EvadeReactAttack", {
 AbilityTab:AddDropdown("EvadeDodgeMode", {
     Text = "Режим уворота",
     Values = { "Side", "Back", "Behind" },
-    Default = 1,
-    Multi = false,
+    Default = 1, Multi = false,
     Callback = function(v) Evade.DodgeMode = v Notify("Режим уворота: " .. v, true) end
 })
 
@@ -2378,6 +2389,11 @@ AbilityTab:AddSlider("EvadeDodgeCooldown", {
     Default = 0.35, Min = 0.1, Max = 1, Rounding = 2,
     Callback = function(v) Evade.DodgeCooldown = v end
 })
+AbilityTab:AddSlider("EvadeDodgeSpeed", {
+    Text = "Скорость уворота (WalkSpeed)",
+    Default = 55, Min = 20, Max = 120, Rounding = 0,
+    Callback = function(v) Evade.DodgeSpeed = v end
+})
 AbilityTab:AddToggle("EvadeAlternateSides", {
     Text = "Чередовать стороны",
     Default = true,
@@ -2394,8 +2410,7 @@ AbilityTab:AddDivider()
 AbilityTab:AddDropdown("EvadeMode", {
     Text = "Evade Mode (подход)",
     Values = { "Behind", "Arc" },
-    Default = 1,
-    Multi = false,
+    Default = 1, Multi = false,
     Callback = function(v) Evade.Mode = v end
 })
 AbilityTab:AddSlider("EvadeRadius", {
@@ -2423,11 +2438,6 @@ AbilityTab:AddToggle("EvadeDodgeAttack", {
     Default = true,
     Callback = function(v) Evade.DodgeAttack = v Notify("Dodge Attack Side", v) end
 })
-AbilityTab:AddToggle("EvadeTeleport", {
-    Text = "Instant Teleport",
-    Default = true,
-    Callback = function(v) Evade.Teleport = v Notify("Instant Teleport", v) end
-})
 AbilityTab:AddToggle("EvadeLookAtKiller", {
     Text = "Look at killer after",
     Default = true,
@@ -2451,8 +2461,7 @@ AbilityTab:AddSlider("EvadeAngle", {
 AbilityTab:AddDropdown("EvadeDirection", {
     Text = "Arc Direction",
     Values = { "Right", "Left" },
-    Default = 1,
-    Multi = false,
+    Default = 1, Multi = false,
     Callback = function(v) Evade.Direction = (v == "Right") and -1 or 1 end
 })
 AbilityTab:AddToggle("EvadeApproach", {
@@ -2548,8 +2557,7 @@ AimlockBox:AddToggle("GunAimEnabled", {
 })
 AimlockBox:AddDropdown("GunAimTarget", {
     Values = { "Killer", "Survivor", "SCP" },
-    Default = 1,
-    Text = "Target",
+    Default = 1, Text = "Target",
     Callback = function(v) GunAim.TargetMode = v end
 })
 AimlockBox:AddDropdown("GunAimPart", {
