@@ -3,14 +3,17 @@ local Library = loadstring(game:HttpGet(repo .. "Library.lua"))()
 local ThemeManager = loadstring(game:HttpGet(repo .. "addons/ThemeManager.lua"))()
 local SaveManager = loadstring(game:HttpGet(repo .. "addons/SaveManager.lua"))()
 
--- Новая цветовая схема (синяя тема)
-Library.Scheme.AccentColor     = Color3.fromRGB(80, 170, 255)
-Library.Scheme.BackgroundColor = Color3.fromRGB(18, 18, 22)
-Library.Scheme.MainColor       = Color3.fromRGB(30, 30, 38)
-Library.Scheme.OutlineColor    = Color3.fromRGB(80, 170, 255)
-Library.Scheme.FontColor       = Color3.fromRGB(230, 230, 235)
+-- ================= ЦВЕТА (анимированный градиент) =================
+local COLOR_PURPLE = Color3.fromRGB(180, 80, 255)   -- фиолетовый
+local COLOR_PINK   = Color3.fromRGB(255, 100, 200)  -- розовый
 
-local LOGO_ID = "rbxassetid://84595637083275"
+Library.Scheme.AccentColor     = COLOR_PURPLE
+Library.Scheme.BackgroundColor = Color3.fromRGB(12, 12, 12)
+Library.Scheme.MainColor       = Color3.fromRGB(35, 35, 35)
+Library.Scheme.OutlineColor    = COLOR_PURPLE
+Library.Scheme.FontColor       = Color3.fromRGB(240, 240, 240)
+
+local LOGO_ID = "rbxassetid://83643298666145"
 local IS_MOBILE = game:GetService("UserInputService").TouchEnabled
 
 -- ================= MAIN SCRIPT =================
@@ -18,11 +21,11 @@ local IS_MOBILE = game:GetService("UserInputService").TouchEnabled
 local WindowSize = IS_MOBILE and UDim2.fromOffset(340, 300) or UDim2.fromOffset(600, 400)
 
 local Window = Library:CreateWindow({
-    Title = "Utility",
-    Footer = "Utility Menu",
+    Title = "BRUTALSCRIPT",
+    Footer = "BRUTALSCRIPT - Violence District",
     Icon = LOGO_ID,
     IconSize = UDim2.fromOffset(40, 40),
-    CornerRadius = 6,
+    CornerRadius = 0,
     NotifySide = IS_MOBILE and "Left" or "Right",
     ShowCustomCursor = not IS_MOBILE,
     ShowMobileButtons = IS_MOBILE,
@@ -38,13 +41,13 @@ if IS_MOBILE then
         task.wait(2)
         local obsidian = game:GetService("CoreGui"):FindFirstChild("Obsidian")
         if not obsidian then return end
-        if obsidian:FindFirstChild("UtilityOpenButton") then return end
+        if obsidian:FindFirstChild("BrutalOpenButton") then return end
 
         local btn = Instance.new("TextButton")
-        btn.Name = "UtilityOpenButton"
+        btn.Name = "BrutalOpenButton"
         btn.Size = UDim2.fromOffset(60, 60)
         btn.Position = UDim2.new(0, 15, 0.5, -30)
-        btn.BackgroundColor3 = Color3.fromRGB(80, 170, 255)
+        btn.BackgroundColor3 = COLOR_PURPLE
         btn.BackgroundTransparency = 0.15
         btn.Text = ""
         btn.AutoButtonColor = false
@@ -68,6 +71,17 @@ if IS_MOBILE then
 
         btn.MouseButton1Click:Connect(function() Library:Toggle() end)
         Library:MakeDraggable(btn, btn, true)
+
+        -- Анимируем цвет кнопки
+        task.spawn(function()
+            while btn.Parent do
+                local t = (math.sin(tick() * 1.5) + 1) / 2
+                local c = COLOR_PURPLE:Lerp(COLOR_PINK, t)
+                btn.BackgroundColor3 = c
+                stroke.Color = Color3.fromRGB(255, 255, 255)
+                task.wait(0.05)
+            end
+        end)
     end)
 end
 
@@ -83,7 +97,19 @@ local LocalPlayer = Players.LocalPlayer
 local PlayerGui = LocalPlayer:WaitForChild("PlayerGui")
 local Camera = workspace.CurrentCamera
 
-local Watermark = Library:AddDraggableLabel("Utility")
+local Watermark = Library:AddDraggableLabel("BRUTALSCRIPT")
+
+-- ============== АНИМИРОВАННЫЙ ГРАДИЕНТ ==============
+-- Плавно переливает цвет между фиолетовым и розовым
+task.spawn(function()
+    while true do
+        local t = (math.sin(tick() * 1.5) + 1) / 2   -- 0..1 циклично
+        local c = COLOR_PURPLE:Lerp(COLOR_PINK, t)
+        Library.Scheme.AccentColor  = c
+        Library.Scheme.OutlineColor = c
+        task.wait(0.05)
+    end
+end)
 
 -- ============== NOTIFY HELPER ==============
 local function Notify(title, on)
@@ -96,6 +122,7 @@ local function Notify(title, on)
     end)
 end
 
+-- Стилизация watermark и окна
 task.spawn(function()
     task.wait(1.5)
     local CoreGui = game:GetService("CoreGui")
@@ -103,7 +130,7 @@ task.spawn(function()
         for _, gui in ipairs(CoreGui:GetChildren()) do
             if gui:IsA("ScreenGui") and gui.Name == "Obsidian" then
                 for _, obj in ipairs(gui:GetDescendants()) do
-                    if obj:IsA("TextLabel") and obj.Text == "Utility" then
+                    if obj:IsA("TextLabel") and obj.Text == "BRUTALSCRIPT" then
                         return obj
                     end
                 end
@@ -127,14 +154,72 @@ task.spawn(function()
             elseif child:IsA("UICorner") then child:Destroy() end
         end
         local corner = Instance.new("UICorner")
-        corner.CornerRadius = UDim.new(0, 8)
+        corner.CornerRadius = UDim.new(0, 12)
         corner.Parent = node
         local stroke = Instance.new("UIStroke")
-        stroke.Color = Color3.fromRGB(80, 170, 255)
+        stroke.Color = COLOR_PURPLE
         stroke.Thickness = 1.5
         stroke.ApplyStrokeMode = Enum.ApplyStrokeMode.Border
         stroke.Parent = node
+
+        -- Анимируем обводку watermark
+        task.spawn(function()
+            while stroke.Parent do
+                local t = (math.sin(tick() * 1.5) + 1) / 2
+                stroke.Color = COLOR_PURPLE:Lerp(COLOR_PINK, t)
+                task.wait(0.05)
+            end
+        end)
+
         if node:IsA("Frame") then break end
+    end
+end)
+
+task.spawn(function()
+    task.wait(1.5)
+    local CoreGui = game:GetService("CoreGui")
+    for _, gui in ipairs(CoreGui:GetChildren()) do
+        if gui:IsA("ScreenGui") and gui.Name == "Obsidian" then
+            for _, obj in ipairs(gui:GetDescendants()) do
+                if obj:IsA("Frame") and (obj.Name == "Main" or obj.Name == "Window") then
+                    local outer = Instance.new("UIStroke")
+                    outer.Color = Color3.fromRGB(255, 255, 255)
+                    outer.Thickness = 2
+                    outer.ApplyStrokeMode = Enum.ApplyStrokeMode.Border
+                    outer.Parent = obj
+
+                    local inner = Instance.new("UIStroke")
+                    inner.Color = COLOR_PURPLE
+                    inner.Thickness = 1
+                    inner.ApplyStrokeMode = Enum.ApplyStrokeMode.Border
+                    inner.Transparency = 0.2
+                    inner.Parent = obj
+
+                    -- Анимируем внутреннюю обводку
+                    task.spawn(function()
+                        while inner.Parent do
+                            local t = (math.sin(tick() * 1.5) + 1) / 2
+                            inner.Color = COLOR_PURPLE:Lerp(COLOR_PINK, t)
+                            task.wait(0.05)
+                        end
+                    end)
+
+                    if not IS_MOBILE then
+                        local bgImage = Instance.new("ImageLabel")
+                        bgImage.Name = "BrutalLogo"
+                        bgImage.Size = UDim2.fromScale(0.55, 0.55)
+                        bgImage.Position = UDim2.fromScale(0.225, 0.225)
+                        bgImage.BackgroundTransparency = 1
+                        bgImage.Image = LOGO_ID
+                        bgImage.ImageTransparency = 0.82
+                        bgImage.ZIndex = 0
+                        bgImage.Parent = obj
+                    end
+                    break
+                end
+            end
+            break
+        end
     end
 end)
 
@@ -149,37 +234,37 @@ RunService.RenderStepped:Connect(function()
         Frames = 0
         LastTick = tick()
         local Ping = math.floor(Stats.Network.ServerStatsItem["Data Ping"]:GetValue())
-        Watermark:SetText(string.format("Utility | FPS: %d | Ping: %d ms", FPS, Ping))
+        Watermark:SetText(string.format("BRUTALSCRIPT | FPS: %d | Ping: %d ms", FPS, Ping))
     end
 end)
 
 local Tabs = {
-    Main = Window:AddTab("Main", "home"),
-    Visual = Window:AddTab("Visual", "eye"),
-    Combat = Window:AddTab("Combat", "user"),
-    Utility = Window:AddTab("Utility", "sliders-horizontal"),
-    Graphics = Window:AddTab("Graphics", "sparkles"),
-    Config = Window:AddTab("Config", "settings-2")
+    Info = Window:AddTab("Info", "info"),
+    ESP = Window:AddTab("ESP", "eye"),
+    Player = Window:AddTab("Player", "user"),
+    Misc = Window:AddTab("Misc", "sliders-horizontal"),
+    Visual = Window:AddTab("Visual", "sparkles"),
+    UISettings = Window:AddTab("UI Settings", "settings-2")
 }
 
-local InfoBox = Tabs.Main:AddLeftGroupbox("Information", "info")
-local CreditsBox = Tabs.Main:AddRightGroupbox("About", "user")
-local ESPBox = Tabs.Visual:AddLeftGroupbox("Player ESP", "scan-eye")
-local ESPStatusBox = Tabs.Visual:AddRightGroupbox("Status", "scan-eye")
+local InfoBox = Tabs.Info:AddLeftGroupbox("Script Info", "info")
+local CreditsBox = Tabs.Info:AddRightGroupbox("Credits", "user")
+local ESPBox = Tabs.ESP:AddLeftGroupbox("ESP Cham", "scan-eye")
+local ESPStatusBox = Tabs.ESP:AddRightGroupbox("ESP Status", "scan-eye")
 
-local RightTabBox = Tabs.Combat:AddRightTabbox()
+local RightTabBox = Tabs.Player:AddRightTabbox()
 local AbilityTab = RightTabBox:AddTab("Survivor", "user")
 local KillerTab = RightTabBox:AddTab("Killer", "skull")
-local AimlockBox = Tabs.Combat:AddLeftGroupbox("Aimbot", "crosshair")
-local ParryBox = Tabs.Combat:AddLeftGroupbox("Parry", "swords")
-local CrosshairBox = Tabs.Combat:AddLeftGroupbox("Crosshair", "crosshair")
-local MovementBox = Tabs.Utility:AddLeftGroupbox("Movement", "move")
-local EmoteBox = Tabs.Utility:AddRightGroupbox("Emotes", "music")
-local FunBox = Tabs.Utility:AddRightGroupbox("Fun", "smile")
-local VisualBox = Tabs.Graphics:AddLeftGroupbox("Graphics", "sun")
-local TimeBox = Tabs.Graphics:AddRightGroupbox("Lighting", "alarm-clock-check")
-local ZoomBox = Tabs.Graphics:AddRightGroupbox("Camera", "fullscreen")
-local SettingBox = Tabs.Config:AddLeftGroupbox("Menu", "wrench")
+local AimlockBox = Tabs.Player:AddLeftGroupbox("AimBot", "crosshair")
+local ParryBox = Tabs.Player:AddLeftGroupbox("Parry", "swords")
+local CrosshairBox = Tabs.Player:AddLeftGroupbox("Crosshair", "crosshair")
+local MovementBox = Tabs.Misc:AddLeftGroupbox("Movement", "move")
+local EmoteBox = Tabs.Misc:AddRightGroupbox("Emote", "music")
+local FunBox = Tabs.Misc:AddRightGroupbox("fun", "smile")
+local VisualBox = Tabs.Visual:AddLeftGroupbox("Graphics", "sun")
+local TimeBox = Tabs.Visual:AddRightGroupbox("Clock & Ambient", "alarm-clock-check")
+local ZoomBox = Tabs.Visual:AddRightGroupbox("Zoom Out", "fullscreen")
+local SettingBox = Tabs.UISettings:AddLeftGroupbox("Menu", "wrench")
 
 local CarryEvent = ReplicatedStorage:WaitForChild("Remotes"):WaitForChild("Carry"):WaitForChild("CarrySurvivorEvent")
 local HookEvent = ReplicatedStorage:WaitForChild("Remotes"):WaitForChild("Carry"):WaitForChild("HookEvent")
@@ -299,7 +384,6 @@ local function findFreeDirection(originPos, baseDir, distance)
     return baseDir
 end
 
--- РЕАЛЬНАЯ ходьба через Humanoid:Move
 local function moveToPoint(targetPos, killerRoot, lookAt)
     local myRoot = getRoot()
     local hum = getHum()
@@ -1264,7 +1348,7 @@ local function createMoonwalkButton()
     if not PlayerGui or not PlayerGui.Parent then return end
     if MoonwalkButton then MoonwalkButton:Destroy() end
     local gui = Instance.new("ScreenGui")
-    gui.Name = "MWGui"
+    gui.Name = "MoonwalkGui"
     gui.ResetOnSpawn = false
     gui.Parent = PlayerGui
     local btn = Instance.new("ImageButton")
@@ -1293,7 +1377,7 @@ local function createMoonwalkButton()
         Moonwalk.Enabled = not Moonwalk.Enabled
         local hum = getHum()
         if Moonwalk.Enabled then
-            stroke.Color = Color3.fromRGB(80, 170, 255)
+            stroke.Color = COLOR_PINK
         else
             stroke.Color = Color3.fromRGB(255,255,255)
             if hum then hum.WalkSpeed = Movement.WalkSpeedEnabled and Movement.WalkSpeedValue or 16 end
@@ -1452,7 +1536,7 @@ local function applyCameraFOV()
     else cam.FieldOfView = CameraZoom.DefaultFOV end
 end
 
-local JerkTool = { Enabled = false, ToolName = "Staff" }
+local JerkTool = { Enabled = false, ToolName = "Jerk Off" }
 local currentJerkTool = nil
 
 local function createJerkTool()
@@ -1465,7 +1549,7 @@ local function createJerkTool()
     if not humanoid or not backpack then return end
     local tool = Instance.new("Tool")
     tool.Name = JerkTool.ToolName
-    tool.ToolTip = "."
+    tool.ToolTip = "in the stripped club."
     tool.RequiresHandle = false
     tool.Parent = backpack
     currentJerkTool = tool
@@ -1752,7 +1836,7 @@ end
 local function createEmoteButton()
     if EmoteButton.GuiInstance then EmoteButton.GuiInstance:Destroy() end
     local gui = Instance.new("ScreenGui")
-    gui.Name = "EmoteBtnGui"
+    gui.Name = "EmoteButtonGui"
     gui.ResetOnSpawn = false
     gui.Parent = PlayerGui
     local btn = Instance.new("ImageButton")
@@ -1788,7 +1872,7 @@ local function createEmoteButton()
     label.Parent = btn
     btn.MouseButton1Click:Connect(function()
         playEmote(Emote.Selected)
-        stroke.Color = Color3.fromRGB(80, 170, 255)
+        stroke.Color = COLOR_PINK
         task.delay(0.3, function() stroke.Color = Color3.fromRGB(255, 255, 255) end)
     end)
     EmoteButton.GuiInstance = gui
@@ -2005,19 +2089,20 @@ end)
 
 -- ================= UI =================
 
-InfoBox:AddLabel("Utility Menu")
-InfoBox:AddLabel("Version: 1.0")
+InfoBox:AddLabel("Script: BRUTALSCRIPT")
+InfoBox:AddLabel("Version: 1.0.0")
 InfoBox:AddLabel("Game: Violence District")
+InfoBox:AddLabel("Dev: BRUTALSCRIPT TEAM")
 
-CreditsBox:AddLabel("Built with Obsidian UI")
+CreditsBox:AddLabel("Developer: BRUTALSCRIPT")
 CreditsBox:AddDivider()
-CreditsBox:AddLabel("Hotkey: RightShift")
+CreditsBox:AddLabel("Library: Obsidian UI")
 
 -- ESP
 local SurvivorESP = ESPBox:AddCheckbox("SurvivorESP", {
-    Text = "Survivor ESP",
+    Text = "ESP Survivor",
     Default = false,
-    Callback = function(v) ESP.Survivor = v Notify("Survivor ESP", v) end
+    Callback = function(v) ESP.Survivor = v Notify("ESP Survivor", v) end
 })
 SurvivorESP:AddColorPicker("SurvivorESPColor", {
     Default = TeamColors.Survivor,
@@ -2026,9 +2111,9 @@ SurvivorESP:AddColorPicker("SurvivorESPColor", {
 })
 
 local KillerESP = ESPBox:AddCheckbox("KillerESP", {
-    Text = "Killer ESP",
+    Text = "ESP Killer",
     Default = false,
-    Callback = function(v) ESP.Killer = v Notify("Killer ESP", v) end
+    Callback = function(v) ESP.Killer = v Notify("ESP Killer", v) end
 })
 KillerESP:AddColorPicker("KillerESPColor", {
     Default = TeamColors.Killer,
@@ -2087,24 +2172,24 @@ ESPBox:AddSlider("ESPDistance", {
 })
 
 ESPStatusBox:AddCheckbox("EnableStatus", {
-    Text = "Enable Status",
+    Text = "Enable Status ESP",
     Default = false,
-    Callback = function(v) ESPStatus.Enabled = v Notify("Status", v) end
+    Callback = function(v) ESPStatus.Enabled = v Notify("Status ESP", v) end
 })
 ESPStatusBox:AddCheckbox("ShowName", {
     Text = "Show Name",
     Default = true,
-    Callback = function(v) ESPStatus.ShowName = v Notify("Name", v) end
+    Callback = function(v) ESPStatus.ShowName = v Notify("Show Name", v) end
 })
 ESPStatusBox:AddCheckbox("ShowDistance", {
     Text = "Show Distance",
     Default = true,
-    Callback = function(v) ESPStatus.ShowDistance = v Notify("Distance", v) end
+    Callback = function(v) ESPStatus.ShowDistance = v Notify("Show Distance", v) end
 })
 ESPStatusBox:AddCheckbox("ShowHealth", {
     Text = "Show Health",
     Default = false,
-    Callback = function(v) ESPStatus.ShowHealth = v Notify("Health", v) end
+    Callback = function(v) ESPStatus.ShowHealth = v Notify("Show Health", v) end
 })
 ESPStatusBox:AddSlider("StatusRadius", {
     Text = "Status Radius",
@@ -2154,14 +2239,14 @@ AbilityTab:AddCheckbox("AutoWiggle", {
     Callback = function(v) Auto.Wiggle = v Notify("Auto Wiggle", v) end
 })
 AbilityTab:AddCheckbox("AutoFleeKiller", {
-    Text = "Auto Flee",
+    Text = "Auto Flee Killer",
     Default = false,
-    Callback = function(v) AutoFlee.Enabled = v Notify("Auto Flee", v) end
+    Callback = function(v) AutoFlee.Enabled = v Notify("Auto Flee Killer", v) end
 })
 AbilityTab:AddCheckbox("GodMode", {
-    Text = "Anti Knockdown",
+    Text = "Anti KnockDown",
     Default = false,
-    Callback = function(v) PlayerMods.GodMode = v Notify("Anti Knockdown", v) end
+    Callback = function(v) PlayerMods.GodMode = v Notify("Anti KnockDown", v) end
 })
 AbilityTab:AddCheckbox("FastVault", {
     Text = "Fast Vault",
@@ -2169,7 +2254,7 @@ AbilityTab:AddCheckbox("FastVault", {
     Callback = function(v) FastVault.Enabled = v Notify("Fast Vault", v) end
 })
 AbilityTab:AddSlider("VaultSpeed", {
-    Text = "Vault Speed",
+    Text = "Animation Speed",
     Default = 1.2, Min = 1, Max = 5, Rounding = 1,
     Callback = function(v) FastVault.Speed = v end
 })
@@ -2177,7 +2262,7 @@ AbilityTab:AddSlider("VaultSpeed", {
 AbilityTab:AddDivider()
 
 AbilityTab:AddCheckbox("MoonwalkButton", {
-    Text = "Moonwalk Button",
+    Text = "MoonwalkButton",
     Default = false,
     Callback = function(v)
         Moonwalk.ShowButton = v
@@ -2211,76 +2296,76 @@ AbilityTab:AddSlider("MoonwalkIntensity", {
     Callback = function(Value) Moonwalk.Intensity = Value end
 })
 AbilityTab:AddButton({
-    Text = "Instant Escape",
+    Text = "instant escape",
     Func = function() teleportToFinishLine() end
 })
 
 AbilityTab:AddDivider()
 
-AbilityTab:AddLabel("Evade Keybind"):AddKeyPicker("EvadeBind", {
+AbilityTab:AddLabel("Side Step Evade Keybind"):AddKeyPicker("EvadeBind", {
     Default = "Z",
     Mode = "Toggle",
-    Text = "Evade (toggle)",
+    Text = "Side Step (toggle)",
     Callback = function(state)
         Evade.Enabled = state
-        Notify("Evade", state)
+        Notify("Side Step Evade", state)
     end
 })
 
 AbilityTab:AddCheckbox("EvadeEnable", {
-    Text = "Evade",
+    Text = "Side Step Evade",
     Default = false,
-    Callback = function(v) Evade.Enabled = v Notify("Evade", v) end
+    Callback = function(v) Evade.Enabled = v Notify("Side Step Evade", v) end
 })
 
 AbilityTab:AddToggle("EvadeReactAttack", {
-    Text = "Dodge on attack",
+    Text = "⚡ Уворот от удара (главное)",
     Default = true,
-    Callback = function(v) Evade.ReactToAttack = v Notify("Dodge on attack", v) end
+    Callback = function(v) Evade.ReactToAttack = v Notify("Уворот от удара", v) end
 })
 
 AbilityTab:AddDropdown("EvadeDodgeMode", {
-    Text = "Dodge Mode",
+    Text = "Режим уворота",
     Values = { "Side", "Back", "Behind" },
     Default = 1, Multi = false,
-    Callback = function(v) Evade.DodgeMode = v Notify("Mode: " .. v, true) end
+    Callback = function(v) Evade.DodgeMode = v Notify("Режим уворота: " .. v, true) end
 })
 
 AbilityTab:AddSlider("EvadeDodgeDist", {
-    Text = "Dodge Distance",
+    Text = "Дистанция уворота",
     Default = 12, Min = 5, Max = 30, Rounding = 0,
     Callback = function(v) Evade.DodgeDistance = v end
 })
 AbilityTab:AddSlider("EvadeAttackRange", {
-    Text = "Reaction Distance",
+    Text = "Реакция на удар (дистанция)",
     Default = 12, Min = 5, Max = 25, Rounding = 0,
     Callback = function(v) Evade.AttackRange = v end
 })
 AbilityTab:AddSlider("EvadeDodgeCooldown", {
-    Text = "Anti-spam",
+    Text = "Антиспам уворота",
     Default = 0.35, Min = 0.1, Max = 1, Rounding = 2,
     Callback = function(v) Evade.DodgeCooldown = v end
 })
 AbilityTab:AddSlider("EvadeDodgeSpeed", {
-    Text = "Dodge WalkSpeed",
+    Text = "Скорость уворота (WalkSpeed)",
     Default = 55, Min = 20, Max = 120, Rounding = 0,
     Callback = function(v) Evade.DodgeSpeed = v end
 })
 AbilityTab:AddToggle("EvadeAlternateSides", {
-    Text = "Alternate sides",
+    Text = "Чередовать стороны",
     Default = true,
-    Callback = function(v) Evade.AlternateSides = v Notify("Alternate sides", v) end
+    Callback = function(v) Evade.AlternateSides = v Notify("Чередовать стороны", v) end
 })
 AbilityTab:AddToggle("EvadePredictAim", {
-    Text = "Predict movement",
+    Text = "Предугадывать движение киллера",
     Default = true,
-    Callback = function(v) Evade.PredictAim = v Notify("Predict", v) end
+    Callback = function(v) Evade.PredictAim = v Notify("Предугадывание", v) end
 })
 
 AbilityTab:AddDivider()
 
 AbilityTab:AddDropdown("EvadeMode", {
-    Text = "Evade Mode",
+    Text = "Evade Mode (подход)",
     Values = { "Behind", "Arc" },
     Default = 1, Multi = false,
     Callback = function(v) Evade.Mode = v end
@@ -2306,17 +2391,17 @@ AbilityTab:AddSlider("EvadeOffsetSide", {
     Callback = function(v) Evade.OffsetSide = v end
 })
 AbilityTab:AddToggle("EvadeDodgeAttack", {
-    Text = "Dodge Attack Side",
+    Text = "Dodge Attack Side (подход)",
     Default = true,
     Callback = function(v) Evade.DodgeAttack = v Notify("Dodge Attack Side", v) end
 })
 AbilityTab:AddToggle("EvadeLookAtKiller", {
-    Text = "Look at target",
+    Text = "Look at killer after",
     Default = true,
-    Callback = function(v) Evade.LookAtKiller = v Notify("Look at target", v) end
+    Callback = function(v) Evade.LookAtKiller = v Notify("Look at killer", v) end
 })
 AbilityTab:AddToggle("EvadeRaycast", {
-    Text = "Wall Check",
+    Text = "Wall check",
     Default = true,
     Callback = function(v) Evade.UseRaycast = v Notify("Wall Check", v) end
 })
@@ -2326,7 +2411,7 @@ AbilityTab:AddSlider("EvadeDuration", {
     Callback = function(v) Evade.Duration = v end
 })
 AbilityTab:AddSlider("EvadeAngle", {
-    Text = "Evade Angle",
+    Text = "Evade Angle (deg)",
     Default = 160, Min = 60, Max = 200, Rounding = 0,
     Callback = function(v) Evade.Angle = v end
 })
@@ -2337,7 +2422,7 @@ AbilityTab:AddDropdown("EvadeDirection", {
     Callback = function(v) Evade.Direction = (v == "Right") and -1 or 1 end
 })
 AbilityTab:AddToggle("EvadeApproach", {
-    Text = "Only when approaching",
+    Text = "Only when killer approaches",
     Default = true,
     Callback = function(v) Evade.RequireApproach = v Notify("Only when approaching", v) end
 })
@@ -2358,12 +2443,12 @@ KillerTab:AddCheckbox("AutoStalk", {
     end
 })
 KillerTab:AddCheckbox("AttackAim", {
-    Text = "Aim Lock Attack",
+    Text = "AimLock Attack",
     Default = false,
     Callback = function(v)
         AttackAim.Enabled = v
         if v then startAttackAim() end
-        Notify("Aim Lock Attack", v)
+        Notify("AimLock Attack", v)
     end
 })
 KillerTab:AddCheckbox("KillAll", {
@@ -2374,7 +2459,7 @@ KillerTab:AddCheckbox("KillAll", {
 KillerTab:AddCheckbox("AutoAttack", {
     Text = "Auto Spam Attack",
     Default = false,
-    Callback = function(v) Killer.AutoAttack = v Notify("Auto Attack", v) end
+    Callback = function(v) Killer.AutoAttack = v Notify("Auto Spam Attack", v) end
 })
 KillerTab:AddSlider("AttackDelay", {
     Text = "Attack Delay",
@@ -2439,7 +2524,7 @@ ParryBox:AddSlider("ParryDistance", {
     Callback = function(v) Auto.ParryDistance = v end
 })
 ParryBox:AddSlider("FaceSensitivity", {
-    Text = "Face Sensitivity",
+    Text = "Face Sensitivity Killer",
     Default = 0.7, Min = -1, Max = 1, Rounding = 2,
     Callback = function(v) Auto.FaceSensitivity = v end
 })
@@ -2509,7 +2594,7 @@ MovementBox:AddCheckbox("JumpPowerToggle", {
             local hum = getHum()
             if hum then hum.JumpPower = Movement.OriginalJumpPower end
         end
-        Notify("Jump Power", v)
+        Notify("Custom Jump Power", v)
     end
 })
 MovementBox:AddSlider("JumpPowerSlider", {
@@ -2546,7 +2631,7 @@ EmoteBox:AddToggle("ShowEmoteButton", {
 
 -- FUN
 FunBox:AddToggle("JerkTool", {
-    Text = "Custom Tool",
+    Text = "Jerk Tool",
     Default = false,
     Callback = function(v)
         JerkTool.Enabled = v
@@ -2554,7 +2639,7 @@ FunBox:AddToggle("JerkTool", {
         else
             if currentJerkTool then currentJerkTool:Destroy() currentJerkTool = nil end
         end
-        Notify("Custom Tool", v)
+        Notify("Jerk Tool", v)
     end
 })
 
@@ -2587,12 +2672,12 @@ VisualBox:AddCheckbox("CleanSky", {
 
 -- CAMERA
 ZoomBox:AddToggle("UnlimitedZoom", {
-    Text = "Unlimited Zoom",
+    Text = "Unlimited Zoom Out",
     Default = false,
     Callback = function(v) CameraZoom.UnlimitedZoom = v applyUnlimitedZoom() Notify("Unlimited Zoom", v) end
 })
 ZoomBox:AddSlider("MaxZoomDistance", {
-    Text = "Max Distance",
+    Text = "Max Zoom Distance",
     Default = 1000, Min = 100, Max = 5000, Rounding = 0,
     Callback = function(v)
         CameraZoom.MaxDistance = v
@@ -2615,7 +2700,7 @@ ZoomBox:AddSlider("CameraFOV", {
 
 -- LIGHTING
 TimeBox:AddSlider("ClockTime", {
-    Text = "Time",
+    Text = "Clock Time",
     Default = 14, Min = 0, Max = 24, Rounding = 0,
     Callback = function(v) Visual.ClockTime = v Visual.Ambient = true applyVisual() end
 })
@@ -2629,7 +2714,7 @@ TimeBox:AddSlider("Brightness", {
 SettingBox:AddToggle("ShowCustomCursor", {
     Text = "Custom Cursor",
     Default = not IS_MOBILE,
-    Callback = function(Value) Library.ShowCustomCursor = Value Notify("Cursor", Value) end
+    Callback = function(Value) Library.ShowCustomCursor = Value Notify("Custom Cursor", Value) end
 })
 SettingBox:AddDropdown("NotificationSide", {
     Values = { "Left", "Right" },
@@ -2660,12 +2745,16 @@ SettingBox:AddToggle("WatermarkToggle", {
 
 SettingBox:AddDivider()
 
-SettingBox:AddButton("Unload Script", function() Library:Unload() end)
+SettingBox:AddButton("Join Discord", function()
+    setclipboard("https://discord.gg/3kmTx8Aeew")
+    Library:Notify({ Title = "link discord telah di copy!!", Duration = 6 })
+end)
+SettingBox:AddButton("Unload script", function() Library:Unload() end)
 
 ThemeManager:SetLibrary(Library)
 SaveManager:SetLibrary(Library)
 SaveManager:IgnoreThemeSettings()
 SaveManager:SetIgnoreIndexes({})
-ThemeManager:SetFolder("Utility")
-SaveManager:SetFolder("Utility/configs")
-SaveManager:BuildConfigSection(Tabs.Config)
+ThemeManager:SetFolder("BRUTALSCRIPT")
+SaveManager:SetFolder("BRUTALSCRIPT/configs")
+SaveManager:BuildConfigSection(Tabs.UISettings)
