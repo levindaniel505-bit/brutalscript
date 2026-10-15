@@ -3,7 +3,7 @@ local Library = loadstring(game:HttpGet(repo .. "Library.lua"))()
 local ThemeManager = loadstring(game:HttpGet(repo .. "addons/ThemeManager.lua"))()
 local SaveManager = loadstring(game:HttpGet(repo .. "addons/SaveManager.lua"))()
 
--- ================= ЦВЕТА =================
+-- ================= ЦВЕТА ПО УМОЛЧАНИЮ =================
 local DEFAULT_ACCENT     = Color3.fromRGB(180, 80, 255)
 local DEFAULT_OUTLINE    = Color3.fromRGB(180, 80, 255)
 local DEFAULT_BACKGROUND = Color3.fromRGB(12, 12, 12)
@@ -17,6 +17,14 @@ Library.Scheme.FontColor       = Color3.fromRGB(240, 240, 240)
 
 local LOGO_ID = "rbxassetid://83643298666145"
 local IS_MOBILE = game:GetService("UserInputService").TouchEnabled
+
+-- Хранилище текущих цветов (для повторной перекраски новых элементов)
+local CurrentColors = {
+    Accent     = DEFAULT_ACCENT,
+    Outline    = DEFAULT_OUTLINE,
+    Background = DEFAULT_BACKGROUND,
+    Main       = DEFAULT_MAIN,
+}
 
 local WindowSize = IS_MOBILE and UDim2.fromOffset(340, 300) or UDim2.fromOffset(600, 400)
 
@@ -36,58 +44,108 @@ local Window = Library:CreateWindow({
     SidebarCompacted = IS_MOBILE,
 })
 
--- ============== ФУНКЦИИ ЦВЕТА / СКРУГЛЕНИЯ ==============
 local CoreGui = game:GetService("CoreGui")
 
+-- ============== ФУНКЦИИ ПЕРЕКРАСКИ И СКРУГЛЕНИЯ ==============
+
+-- Цвет-компаратор (проверяет похожесть двух цветов)
+local function colorClose(a, b, eps)
+    eps = eps or 0.08
+    return math.abs(a.R - b.R) < eps
+       and math.abs(a.G - b.G) < eps
+       and math.abs(a.B - b.B) < eps
+end
+
+-- Запомнить цвета, которые сейчас в UI (чтобы потом менять обратно)
+local capturedColors = {}
+
+-- Жёстко перекрасить ВСЁ меню под текущие CurrentColors
+local function forceRecolor()
+    local obsidian = CoreGui:FindFirstChild("Obsidian")
+    if not obsidian then return end
+
+    for _, obj in ipairs(obsidian:GetDescendants()) do
+        -- UIStroke (края)
+        if obj:IsA("UIStroke") then
+            -- Пропускаем обводки с белым цветом (внешний край окна)
+            if not colorClose(obj.Color, Color3.fromRGB(255,255,255), 0.05) then
+                obj.Color = CurrentColors.Outline
+            end
+        end
+
+        -- Фон элементов
+        if obj:IsA("GuiObject") then
+            local bg = obj.BackgroundColor3
+            -- Фон окна (очень тёмный) → Background
+            if colorClose(bg, DEFAULT_BACKGROUND, 0.05)
+               or colorClose(bg, capturedColors.lastBackground or DEFAULT_BACKGROUND, 0.05) then
+                obj.BackgroundColor3 = CurrentColors.Background
+            end
+            -- Main (фреймы групп)
+            if colorClose(bg, DEFAULT_MAIN, 0.05)
+               or colorClose(bg, capturedColors.lastMain or DEFAULT_MAIN, 0.05) then
+                obj.BackgroundColor3 = CurrentColors.Main
+            end
+            -- Accent (кнопки, чекбоксы)
+            if colorClose(bg, DEFAULT_ACCENT, 0.05)
+               or colorClose(bg, capturedColors.lastAccent or DEFAULT_ACCENT, 0.05) then
+                obj.BackgroundColor3 = CurrentColors.Accent
+            end
+        end
+
+        -- TextColor3 (активные надписи)
+        if obj:IsA("TextLabel") or obj:IsA("TextButton") or obj:IsA("TextBox") then
+            if colorClose(obj.TextColor3, DEFAULT_ACCENT, 0.05)
+               or colorClose(obj.TextColor3, capturedColors.lastAccent or DEFAULT_ACCENT, 0.05) then
+                obj.TextColor3 = CurrentColors.Accent
+            end
+            if colorClose(obj.TextStrokeColor3, DEFAULT_ACCENT, 0.05)
+               or colorClose(obj.TextStrokeColor3, capturedColors.lastAccent or DEFAULT_ACCENT, 0.05) then
+                obj.TextStrokeColor3 = CurrentColors.Accent
+            end
+        end
+
+        -- ImageColor3 (иконки)
+        if obj:IsA("ImageLabel") or obj:IsA("ImageButton") then
+            if colorClose(obj.ImageColor3, DEFAULT_ACCENT, 0.05)
+               or colorClose(obj.ImageColor3, capturedColors.lastAccent or DEFAULT_ACCENT, 0.05) then
+                obj.ImageColor3 = CurrentColors.Accent
+            end
+        end
+    end
+
+    -- Запомнить, какие цвета мы только что применили (чтобы в следующий раз их узнать)
+    capturedColors.lastAccent     = CurrentColors.Accent
+    capturedColors.lastOutline    = CurrentColors.Outline
+    capturedColors.lastBackground = CurrentColors.Background
+    capturedColors.lastMain       = CurrentColors.Main
+end
+
+-- Скруглить все элементы
 local function applyCornerRadius(radius)
-    task.spawn(function()
-        local obsidian = CoreGui:FindFirstChild("Obsidian")
-        if not obsidian then return end
-        for _, obj in ipairs(obsidian:GetDescendants()) do
-            if obj:IsA("GuiObject") and obj.Name ~= "Cursor" then
-                local c = obj:FindFirstChildOfClass("UICorner")
-                if not c then
-                    c = Instance.new("UICorner")
-                    c.Parent = obj
-                end
-                c.CornerRadius = UDim.new(0, radius)
+    local obsidian = CoreGui:FindFirstChild("Obsidian")
+    if not obsidian then return end
+    for _, obj in ipairs(obsidian:GetDescendants()) do
+        if obj:IsA("GuiObject") and obj.Name ~= "Cursor" then
+            local c = obj:FindFirstChildOfClass("UICorner")
+            if not c then
+                c = Instance.new("UICorner")
+                c.Parent = obj
             end
+            c.CornerRadius = UDim.new(0, radius)
         end
-    end)
+    end
 end
 
-local function applyOutlineColor(color)
-    task.spawn(function()
-        local obsidian = CoreGui:FindFirstChild("Obsidian")
-        if not obsidian then return end
-        for _, obj in ipairs(obsidian:GetDescendants()) do
-            if obj:IsA("UIStroke") then
-                obj.Color = color
-            end
-        end
-    end)
-end
-
-local function applyAccentColor(color)
-    Library.Scheme.AccentColor = color
-    Library.Scheme.OutlineColor = color
-    applyOutlineColor(color)
-end
-
-local function applyBackgroundColor(color)
-    Library.Scheme.BackgroundColor = color
-end
-
-local function applyMainColor(color)
-    Library.Scheme.MainColor = color
-end
-
--- Фоновый цикл для скругления (новые элементы тоже)
+-- Фоновый цикл: скругление + перекраска новых элементов
 task.spawn(function()
-    task.wait(1.5)
+    task.wait(2)
     while true do
-        applyCornerRadius(Library.CornerRadius or 12)
-        task.wait(0.6)
+        pcall(function()
+            applyCornerRadius(Library.CornerRadius or 12)
+            forceRecolor()
+        end)
+        task.wait(0.4)
     end
 end)
 
@@ -209,13 +267,15 @@ RunService.RenderStepped:Connect(function()
     end
 end)
 
+-- ВАЖНО: создаём вкладки. UI Settings оставляем для SaveManager
 local Tabs = {
     Info = Window:AddTab("Info", "info"),
     ESP = Window:AddTab("ESP", "eye"),
     Player = Window:AddTab("Player", "user"),
     Misc = Window:AddTab("Misc", "sliders-horizontal"),
     Visual = Window:AddTab("Visual", "sparkles"),
-    UISettings = Window:AddTab("UI Settings", "settings-2")
+    UISettings = Window:AddTab("UI Settings", "settings-2"),
+    Themes = Window:AddTab("Themes", "palette")
 }
 
 local InfoBox = Tabs.Info:AddLeftGroupbox("Script Info", "info")
@@ -235,9 +295,9 @@ local FunBox = Tabs.Misc:AddRightGroupbox("fun", "smile")
 local VisualBox = Tabs.Visual:AddLeftGroupbox("Graphics", "sun")
 local TimeBox = Tabs.Visual:AddRightGroupbox("Clock & Ambient", "alarm-clock-check")
 local ZoomBox = Tabs.Visual:AddRightGroupbox("Zoom Out", "fullscreen")
-
--- Menu и Colors — ОБЕ внутри левой колонки одной группы
 local SettingBox = Tabs.UISettings:AddLeftGroupbox("Menu", "wrench")
+-- Colors — ОТДЕЛЬНАЯ ВКЛАДКА, чтобы не конфликтовать с SaveManager
+local ColorBox = Tabs.Themes:AddLeftGroupbox("Colors", "palette")
 
 local CarryEvent = ReplicatedStorage:WaitForChild("Remotes"):WaitForChild("Carry"):WaitForChild("CarrySurvivorEvent")
 local HookEvent = ReplicatedStorage:WaitForChild("Remotes"):WaitForChild("Carry"):WaitForChild("HookEvent")
@@ -304,6 +364,8 @@ local function getHum()
     local c = LocalPlayer.Character
     return c and c:FindFirstChildOfClass("Humanoid")
 end
+
+-- ============== EVADE LOGIC ==============
 
 local function isPointFree(pos)
     if not Evade.UseRaycast then return true end
@@ -952,12 +1014,6 @@ local function pressRightClick()
     VirtualInputManager:SendMouseButtonEvent(0, 0, 1, false, game, 0)
 end
 
-local AttackPaths = {
-    "Slasher-mob.Controls.attack",
-    "Masked-mob.Controls.attack",
-    "Killer-mob.Controls.attack"
-}
-
 local function GetParryButton()
     local current = PlayerGui
     for segment in string.gmatch("Survivor-mob.Controls.Gui-mob", "[^%.]+") do
@@ -1232,7 +1288,7 @@ local function createMoonwalkButton()
     btn.MouseButton1Click:Connect(function()
         Moonwalk.Enabled = not Moonwalk.Enabled
         local hum = getHum()
-        if Moonwalk.Enabled then stroke.Color = DEFAULT_ACCENT
+        if Moonwalk.Enabled then stroke.Color = CurrentColors.Accent
         else
             stroke.Color = Color3.fromRGB(255,255,255)
             if hum then hum.WalkSpeed = Movement.WalkSpeedEnabled and Movement.WalkSpeedValue or 16 end
@@ -1727,7 +1783,7 @@ local function createEmoteButton()
     label.Parent = btn
     btn.MouseButton1Click:Connect(function()
         playEmote(Emote.Selected)
-        stroke.Color = DEFAULT_ACCENT
+        stroke.Color = CurrentColors.Accent
         task.delay(0.3, function() stroke.Color = Color3.fromRGB(255, 255, 255) end)
     end)
     EmoteButton.GuiInstance = gui
@@ -2229,7 +2285,7 @@ ZoomBox:AddSlider("CameraFOV", {
 TimeBox:AddSlider("ClockTime", { Text = "Clock Time", Default = 14, Min = 0, Max = 24, Rounding = 0, Callback = function(v) Visual.ClockTime = v Visual.Ambient = true applyVisual() end })
 TimeBox:AddSlider("Brightness", { Text = "Brightness", Default = 2, Min = 0, Max = 5, Rounding = 1, Callback = function(v) Visual.Brightness = v Visual.Ambient = true applyVisual() end })
 
--- ============== SETTINGS + COLORS (ВСЁ В ОДНОЙ ГРУППЕ) ==============
+-- ============== UI SETTINGS (Menu + SaveManager) ==============
 SettingBox:AddToggle("ShowCustomCursor", {
     Text = "Custom Cursor", Default = not IS_MOBILE,
     Callback = function(Value) Library.ShowCustomCursor = Value Notify("Custom Cursor", Value) end
@@ -2259,72 +2315,75 @@ SettingBox:AddToggle("WatermarkToggle", {
     Text = "Watermark", Default = true,
     Callback = function(Value) Watermark.Visible = Value Notify("Watermark", Value) end
 })
-
 SettingBox:AddDivider()
-SettingBox:AddLabel("────── COLORS ──────")
+SettingBox:AddButton("Unload script", function() Library:Unload() end)
 
-SettingBox:AddColorPicker("AccentColorPicker", {
+-- ============== THEMES (отдельная вкладка для цветов) ==============
+ColorBox:AddColorPicker("AccentColorPicker", {
     Default = DEFAULT_ACCENT,
     Title = "Accent Color (галочки, кнопки)",
     Transparency = 0,
     Callback = function(color)
-        applyAccentColor(color)
-        Notify("Accent Color", true)
+        CurrentColors.Accent = color
+        Library.Scheme.AccentColor = color
+        forceRecolor()
+        Notify("Accent Color применён", true)
     end
 })
 
-SettingBox:AddColorPicker("OutlineColorPicker", {
+ColorBox:AddColorPicker("OutlineColorPicker", {
     Default = DEFAULT_OUTLINE,
-    Title = "Outline Color (все края)",
+    Title = "Outline Color (все края/обводки)",
     Transparency = 0,
     Callback = function(color)
+        CurrentColors.Outline = color
         Library.Scheme.OutlineColor = color
-        applyOutlineColor(color)
-        Notify("Outline Color", true)
+        forceRecolor()
+        Notify("Outline Color применён", true)
     end
 })
 
-SettingBox:AddColorPicker("BackgroundColorPicker", {
+ColorBox:AddColorPicker("BackgroundColorPicker", {
     Default = DEFAULT_BACKGROUND,
-    Title = "Background (фон)",
+    Title = "Background (фон окна)",
     Transparency = 0,
     Callback = function(color)
-        applyBackgroundColor(color)
-        Notify("Background", true)
+        CurrentColors.Background = color
+        Library.Scheme.BackgroundColor = color
+        forceRecolor()
+        Notify("Background применён", true)
     end
 })
 
-SettingBox:AddColorPicker("MainColorPicker", {
+ColorBox:AddColorPicker("MainColorPicker", {
     Default = DEFAULT_MAIN,
-    Title = "Main (фреймы)",
+    Title = "Main Color (фреймы групп)",
     Transparency = 0,
     Callback = function(color)
-        applyMainColor(color)
-        Notify("Main Color", true)
+        CurrentColors.Main = color
+        Library.Scheme.MainColor = color
+        forceRecolor()
+        Notify("Main Color применён", true)
     end
 })
 
-SettingBox:AddButton({
-    Text = "Reset Colors",
+ColorBox:AddButton({
+    Text = "Reset All Colors",
     Func = function()
-        applyAccentColor(DEFAULT_ACCENT)
-        Library.Scheme.OutlineColor = DEFAULT_OUTLINE
-        applyOutlineColor(DEFAULT_OUTLINE)
-        applyBackgroundColor(DEFAULT_BACKGROUND)
-        applyMainColor(DEFAULT_MAIN)
+        CurrentColors.Accent     = DEFAULT_ACCENT
+        CurrentColors.Outline    = DEFAULT_OUTLINE
+        CurrentColors.Background = DEFAULT_BACKGROUND
+        CurrentColors.Main       = DEFAULT_MAIN
+        Library.Scheme.AccentColor     = DEFAULT_ACCENT
+        Library.Scheme.OutlineColor    = DEFAULT_OUTLINE
+        Library.Scheme.BackgroundColor = DEFAULT_BACKGROUND
+        Library.Scheme.MainColor       = DEFAULT_MAIN
+        forceRecolor()
         Notify("Цвета сброшены", true)
     end
 })
 
-SettingBox:AddDivider()
-
-SettingBox:AddButton("Join Discord", function()
-    setclipboard("https://discord.gg/3kmTx8Aeew")
-    Library:Notify({ Title = "link discord telah di copy!!", Duration = 6 })
-end)
-SettingBox:AddButton("Unload script", function() Library:Unload() end)
-
--- ============== SAVE MANAGER (КОНФИГИ) ==============
+-- ============== SAVE MANAGER (конфиги) ==============
 ThemeManager:SetLibrary(Library)
 SaveManager:SetLibrary(Library)
 SaveManager:IgnoreThemeSettings()
