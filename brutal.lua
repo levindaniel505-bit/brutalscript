@@ -3,9 +3,8 @@ local Library = loadstring(game:HttpGet(repo .. "Library.lua"))()
 local ThemeManager = loadstring(game:HttpGet(repo .. "addons/ThemeManager.lua"))()
 local SaveManager = loadstring(game:HttpGet(repo .. "addons/SaveManager.lua"))()
 
--- ================= ПЕРЕЛИВАЮЩИЕСЯ ЦВЕТА =================
-local COLOR_PURPLE = Color3.fromRGB(180, 80, 255)   -- фиолетовый
-local COLOR_PINK   = Color3.fromRGB(255, 100, 200)  -- розовый
+-- ================= ЦВЕТА (статические, меняются через UI) =================
+local COLOR_PURPLE = Color3.fromRGB(180, 80, 255)
 
 Library.Scheme.AccentColor     = COLOR_PURPLE
 Library.Scheme.BackgroundColor = Color3.fromRGB(12, 12, 12)
@@ -36,106 +35,69 @@ local Window = Library:CreateWindow({
     SidebarCompacted = IS_MOBILE,
 })
 
--- ============== АНИМИРОВАННЫЙ ГРАДИЕНТ ПО ВСЕМУ МЕНЮ ==============
--- Работает так: каждый кадр перебираем все GuiObject в Obsidian,
--- и если цвет элемента совпадает со старым акцентным — меняем на новый.
--- Так ВСЁ меню переливается: кнопки, слайдеры, чекбоксы, табы, полосы.
-task.spawn(function()
-    local CoreGui = game:GetService("CoreGui")
-    local lastAccent = COLOR_PURPLE
+-- ============== ФУНКЦИИ ДЛЯ ПЕРЕКРАСКИ И ЗАКРУГЛЕНИЯ ==============
+local CoreGui = game:GetService("CoreGui")
 
-    local function colorClose(a, b, eps)
-        eps = eps or 0.06
-        return math.abs(a.R - b.R) < eps
-           and math.abs(a.G - b.G) < eps
-           and math.abs(a.B - b.B) < eps
-    end
-
-    local function processObject(obj, lastColor, newColor)
-        -- BackgroundColor3 (фон фреймов, кнопок, полос)
-        if obj:IsA("GuiObject") then
-            if colorClose(obj.BackgroundColor3, lastColor) then
-                obj.BackgroundColor3 = newColor
-            end
-        end
-
-        -- TextColor3 (текст в лейблах, кнопках, текстбоксах)
-        if obj:IsA("TextLabel") or obj:IsA("TextButton") or obj:IsA("TextBox") then
-            if colorClose(obj.TextColor3, lastColor) then
-                obj.TextColor3 = newColor
-            end
-            if colorClose(obj.TextStrokeColor3, lastColor) then
-                obj.TextStrokeColor3 = newColor
-            end
-        end
-
-        -- ImageColor3 (иконки, картинки)
-        if obj:IsA("ImageLabel") or obj:IsA("ImageButton") then
-            if colorClose(obj.ImageColor3, lastColor) then
-                obj.ImageColor3 = newColor
-            end
-        end
-
-        -- UIStroke (обводки)
-        if obj:IsA("UIStroke") then
-            if colorClose(obj.Color, lastColor) then
-                obj.Color = newColor
-            end
-        end
-    end
-
-    while true do
-        local t = (math.sin(tick() * 1.5) + 1) / 2
-        local newAccent = COLOR_PURPLE:Lerp(COLOR_PINK, t)
-
-        -- Обновляем глобальную схему (для новых элементов, которые создаются при кликах)
-        Library.Scheme.AccentColor  = newAccent
-        Library.Scheme.OutlineColor = newAccent
-
-        -- Форсированно перекрашиваем ВСЕ существующие элементы
+-- Применить UICorner ко всем элементам меню
+local function applyCornerRadius(radius)
+    task.spawn(function()
         local obsidian = CoreGui:FindFirstChild("Obsidian")
-        if obsidian then
-            for _, obj in ipairs(obsidian:GetDescendants()) do
-                processObject(obj, lastAccent, newAccent)
+        if not obsidian then return end
+        for _, obj in ipairs(obsidian:GetDescendants()) do
+            if obj:IsA("GuiObject") and obj.Name ~= "Cursor" then
+                local c = obj:FindFirstChildOfClass("UICorner")
+                if not c then
+                    c = Instance.new("UICorner")
+                    c.Parent = obj
+                end
+                c.CornerRadius = UDim.new(0, radius)
             end
         end
+    end)
+end
 
-        lastAccent = newAccent
-        task.wait(0.04)
-    end
-end)
+-- Перекрасить все обводки (края)
+local function applyOutlineColor(color)
+    task.spawn(function()
+        local obsidian = CoreGui:FindFirstChild("Obsidian")
+        if not obsidian then return end
+        for _, obj in ipairs(obsidian:GetDescendants()) do
+            if obj:IsA("UIStroke") then
+                obj.Color = color
+            end
+        end
+    end)
+end
 
--- ============== ЗАКРУГЛЕНИЕ ВСЕХ ЭЛЕМЕНТОВ ==============
+-- Перекрасить акцент (галочки, слайдеры, кнопки)
+local function applyAccentColor(color)
+    Library.Scheme.AccentColor = color
+    Library.Scheme.OutlineColor = color
+end
+
+-- Перекрасить фон
+local function applyBackgroundColor(color)
+    Library.Scheme.BackgroundColor = color
+end
+
+-- Перекрасить основной цвет (фреймы)
+local function applyMainColor(color)
+    Library.Scheme.MainColor = color
+end
+
+-- Автоматически скругляем всё меню (при создании новых элементов тоже)
 task.spawn(function()
     task.wait(1.5)
-    local CoreGui = game:GetService("CoreGui")
-    local function roundTree(obj, radius, depth)
-        if depth > 8 then return end
-        if obj:IsA("GuiObject") then
-            if not obj:FindFirstChildOfClass("UICorner") and obj.Name ~= "Cursor" then
-                local c = Instance.new("UICorner")
-                c.CornerRadius = UDim.new(0, radius)
-                c.Parent = obj
-            end
-        end
-        for _, child in ipairs(obj:GetChildren()) do
-            roundTree(child, radius, depth + 1)
-        end
-    end
-
-    for _ = 1, 30 do
-        local obsidian = CoreGui:FindFirstChild("Obsidian")
-        if obsidian then
-            roundTree(obsidian, 8, 0)
-        end
-        task.wait(0.5)
+    while true do
+        applyCornerRadius(Library.CornerRadius or 12)
+        task.wait(0.6)
     end
 end)
 
 if IS_MOBILE then
     task.spawn(function()
         task.wait(2)
-        local obsidian = game:GetService("CoreGui"):FindFirstChild("Obsidian")
+        local obsidian = CoreGui:FindFirstChild("Obsidian")
         if not obsidian then return end
         if obsidian:FindFirstChild("BrutalOpenButton") then return end
 
@@ -167,14 +129,6 @@ if IS_MOBILE then
 
         btn.MouseButton1Click:Connect(function() Library:Toggle() end)
         Library:MakeDraggable(btn, btn, true)
-
-        task.spawn(function()
-            while btn.Parent do
-                local t = (math.sin(tick() * 1.5) + 1) / 2
-                btn.BackgroundColor3 = COLOR_PURPLE:Lerp(COLOR_PINK, t)
-                task.wait(0.05)
-            end
-        end)
     end)
 end
 
@@ -206,7 +160,6 @@ end
 -- Стилизация watermark
 task.spawn(function()
     task.wait(1.5)
-    local CoreGui = game:GetService("CoreGui")
     local function findLabel()
         for _, gui in ipairs(CoreGui:GetChildren()) do
             if gui:IsA("ScreenGui") and gui.Name == "Obsidian" then
@@ -242,15 +195,6 @@ task.spawn(function()
         stroke.Thickness = 1.5
         stroke.ApplyStrokeMode = Enum.ApplyStrokeMode.Border
         stroke.Parent = node
-
-        task.spawn(function()
-            while stroke.Parent do
-                local t = (math.sin(tick() * 1.5) + 1) / 2
-                stroke.Color = COLOR_PURPLE:Lerp(COLOR_PINK, t)
-                task.wait(0.04)
-            end
-        end)
-
         if node:IsA("Frame") then break end
     end
 end)
@@ -297,6 +241,7 @@ local VisualBox = Tabs.Visual:AddLeftGroupbox("Graphics", "sun")
 local TimeBox = Tabs.Visual:AddRightGroupbox("Clock & Ambient", "alarm-clock-check")
 local ZoomBox = Tabs.Visual:AddRightGroupbox("Zoom Out", "fullscreen")
 local SettingBox = Tabs.UISettings:AddLeftGroupbox("Menu", "wrench")
+local ColorBox = Tabs.UISettings:AddRightGroupbox("Colors", "palette")
 
 local CarryEvent = ReplicatedStorage:WaitForChild("Remotes"):WaitForChild("Carry"):WaitForChild("CarrySurvivorEvent")
 local HookEvent = ReplicatedStorage:WaitForChild("Remotes"):WaitForChild("Carry"):WaitForChild("HookEvent")
@@ -341,7 +286,6 @@ local Evade = {
     LookAtKiller = true,
     UseRaycast = true,
     DodgeAttack = true,
-
     ReactToAttack = true,
     DodgeDistance = 12,
     DodgeMode = "Side",
@@ -1409,7 +1353,7 @@ local function createMoonwalkButton()
         Moonwalk.Enabled = not Moonwalk.Enabled
         local hum = getHum()
         if Moonwalk.Enabled then
-            stroke.Color = COLOR_PINK
+            stroke.Color = COLOR_PURPLE
         else
             stroke.Color = Color3.fromRGB(255,255,255)
             if hum then hum.WalkSpeed = Movement.WalkSpeedEnabled and Movement.WalkSpeedValue or 16 end
@@ -1904,7 +1848,7 @@ local function createEmoteButton()
     label.Parent = btn
     btn.MouseButton1Click:Connect(function()
         playEmote(Emote.Selected)
-        stroke.Color = COLOR_PINK
+        stroke.Color = COLOR_PURPLE
         task.delay(0.3, function() stroke.Color = Color3.fromRGB(255, 255, 255) end)
     end)
     EmoteButton.GuiInstance = gui
@@ -2742,6 +2686,59 @@ TimeBox:AddSlider("Brightness", {
     Callback = function(v) Visual.Brightness = v Visual.Ambient = true applyVisual() end
 })
 
+-- ============== UI SETTINGS: ЦВЕТА ==============
+ColorBox:AddColorPicker("AccentColor", {
+    Default = COLOR_PURPLE,
+    Title = "Accent Color (галочки, слайдеры)",
+    Transparency = 0,
+    Callback = function(color)
+        applyAccentColor(color)
+        Notify("Accent Color", true)
+    end
+})
+
+ColorBox:AddColorPicker("OutlineColor", {
+    Default = COLOR_PURPLE,
+    Title = "Outline Color (все края)",
+    Transparency = 0,
+    Callback = function(color)
+        applyOutlineColor(color)
+        Library.Scheme.OutlineColor = color
+        Notify("Outline Color", true)
+    end
+})
+
+ColorBox:AddColorPicker("BackgroundColor", {
+    Default = Color3.fromRGB(12, 12, 12),
+    Title = "Background Color (фон)",
+    Transparency = 0,
+    Callback = function(color)
+        applyBackgroundColor(color)
+        Notify("Background Color", true)
+    end
+})
+
+ColorBox:AddColorPicker("MainColor", {
+    Default = Color3.fromRGB(35, 35, 35),
+    Title = "Main Color (фреймы/группы)",
+    Transparency = 0,
+    Callback = function(color)
+        applyMainColor(color)
+        Notify("Main Color", true)
+    end
+})
+
+ColorBox:AddButton({
+    Text = "Reset Colors",
+    Func = function()
+        applyAccentColor(COLOR_PURPLE)
+        applyOutlineColor(COLOR_PURPLE)
+        applyBackgroundColor(Color3.fromRGB(12, 12, 12))
+        applyMainColor(Color3.fromRGB(35, 35, 35))
+        Notify("Цвета сброшены", true)
+    end
+})
+
 -- SETTINGS
 SettingBox:AddToggle("ShowCustomCursor", {
     Text = "Custom Cursor",
@@ -2766,8 +2763,12 @@ SettingBox:AddDropdown("DPIDropdown", {
 })
 SettingBox:AddSlider("UICornerSlider", {
     Text = "Corner Radius",
-    Default = Library.CornerRadius, Min = 0, Max = 20, Rounding = 0,
-    Callback = function(value) Window:SetCornerRadius(value) end
+    Default = 12, Min = 0, Max = 20, Rounding = 0,
+    Callback = function(value)
+        Library.CornerRadius = value
+        Window:SetCornerRadius(value)
+        applyCornerRadius(value)
+    end
 })
 SettingBox:AddToggle("WatermarkToggle", {
     Text = "Watermark",
