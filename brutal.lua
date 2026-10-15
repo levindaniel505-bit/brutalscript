@@ -364,19 +364,20 @@ local UserInputService = game:GetService("UserInputService")
 local VirtualInputManager = game:GetService("VirtualInputManager")
 local Lighting = game:GetService("Lighting")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local Workspace = game:GetService("Workspace")
 local LocalPlayer = Players.LocalPlayer
 local PlayerGui = LocalPlayer:WaitForChild("PlayerGui")
+local Camera = workspace.CurrentCamera
 
 local Watermark = Library:AddDraggableLabel("BRUTALSCRIPT")
 
+-- ============== NOTIFY HELPER ==============
 local function Notify(title, on)
-    pcall(function()
-        Library:Notify({
-            Title = title,
-            Description = on and "Enabled" or "Disabled",
-            Duration = 2,
-        })
-    end)
+    Library:Notify({
+        Title = title,
+        Description = on and "Enabled" or "Disabled",
+        Duration = 2,
+    })
 end
 
 task.spawn(function()
@@ -418,6 +419,45 @@ task.spawn(function()
         stroke.ApplyStrokeMode = Enum.ApplyStrokeMode.Border
         stroke.Parent = node
         if node:IsA("Frame") then break end
+    end
+end)
+
+task.spawn(function()
+    task.wait(1.5)
+    local CoreGui = game:GetService("CoreGui")
+    for _, gui in ipairs(CoreGui:GetChildren()) do
+        if gui:IsA("ScreenGui") and gui.Name == "Obsidian" then
+            for _, obj in ipairs(gui:GetDescendants()) do
+                if obj:IsA("Frame") and (obj.Name == "Main" or obj.Name == "Window") then
+                    local outer = Instance.new("UIStroke")
+                    outer.Color = Color3.fromRGB(255, 255, 255)
+                    outer.Thickness = 2
+                    outer.ApplyStrokeMode = Enum.ApplyStrokeMode.Border
+                    outer.Parent = obj
+
+                    local inner = Instance.new("UIStroke")
+                    inner.Color = Color3.fromRGB(180, 80, 255)
+                    inner.Thickness = 1
+                    inner.ApplyStrokeMode = Enum.ApplyStrokeMode.Border
+                    inner.Transparency = 0.2
+                    inner.Parent = obj
+
+                    if not IS_MOBILE then
+                        local bgImage = Instance.new("ImageLabel")
+                        bgImage.Name = "BrutalLogo"
+                        bgImage.Size = UDim2.fromScale(0.55, 0.55)
+                        bgImage.Position = UDim2.fromScale(0.225, 0.225)
+                        bgImage.BackgroundTransparency = 1
+                        bgImage.Image = LOGO_ID
+                        bgImage.ImageTransparency = 0.82
+                        bgImage.ZIndex = 0
+                        bgImage.Parent = obj
+                    end
+                    break
+                end
+            end
+            break
+        end
     end
 end)
 
@@ -482,11 +522,14 @@ local Killer = { KillAll = false, AutoAttack = false, AutoCarry = false, KillRan
 local KillerBusy = false
 local KillerTarget = nil
 local ParryActive = false
+local Masked = { Enabled = false, CurrentPower = "Cobra" }
+local MaskedPowers = {"Cobra", "Richter", "Brandon", "Rabbit", "Alex"}
 
 local Moonwalk = { Enabled = false, ShowButton = false, SpamSpeed = 30, Intensity = 35, SlowSpeed = 20, UseSlow = true }
+local MoonwalkConnection = nil
 local MoonwalkButton = nil
 
--- ============== EVADE (движение, не телепорт) ==============
+-- ============== SIDE STEP (evade killer, walk imitation) ==============
 local Evade = {
     Enabled = false,
     Radius = 15,
@@ -498,22 +541,13 @@ local Evade = {
     Active = false,
     LastTrigger = 0,
     RequireApproach = true,
-    Mode = "Behind",
-    BehindDistance = 3,
-    OffsetSide = 0,
-    LookAtKiller = true,
-    UseRaycast = true,
-    DodgeAttack = true,
-    ReactToAttack = true,
-    DodgeDistance = 12,
-    DodgeMode = "Side",
-    AlternateSides = true,
-    AttackRange = 12,
-    DodgeCooldown = 0.35,
-    PredictAim = true,
-    LastDodgeSide = 1,
-    LastDodgeTime = 0,
-    DodgeSpeed = 55,
+    Mode = "Behind",        -- "Behind" (за спину) или "Arc" (старое поведение)
+    BehindDistance = 3,     -- на сколько студов встать за спиной киллера
+    OffsetSide = 0,         -- смещение вбок от спины (студа)
+    Teleport = true,        -- true = мгновенный CFrame, false = плавный lerp
+    LookAtKiller = true,    -- смотреть на киллера после мува
+    UseRaycast = true,      -- проверять, что точка за спиной не в стене
+    DodgeAttack = true,     -- уклоняться в сторону, противоположную удару
 }
 
 local CameraZoom = { UnlimitedZoom = false, MaxDistance = 1000, MinDistance = 0, FOVEnabled = false, FOV = 70, DefaultFOV = workspace.CurrentCamera.FieldOfView }
@@ -548,8 +582,9 @@ local function getHum()
     return c and c:FindFirstChildOfClass("Humanoid")
 end
 
--- ============== EVADE LOGIC ==============
+-- ============== SIDE STEP LOGIC ==============
 
+-- Проверка: не в стене ли точка
 local function isPointFree(pos)
     if not Evade.UseRaycast then return true end
     local params = RaycastParams.new()
@@ -560,178 +595,23 @@ local function isPointFree(pos)
     return result ~= nil
 end
 
-local function findFreeDirection(originPos, baseDir, distance)
-    local attempts = {
-        baseDir,
-        (baseDir + Vector3.new(0, 0, 1)).Unit,
-        (baseDir + Vector3.new(0, 0, -1)).Unit,
-        (baseDir + Vector3.new(1, 0, 0)).Unit,
-        (baseDir + Vector3.new(-1, 0, 0)).Unit,
-    }
-    for _, dir in ipairs(attempts) do
-        local candidate = originPos + dir * distance
-        candidate = Vector3.new(candidate.X, originPos.Y, candidate.Z)
-        if isPointFree(candidate) then
-            return dir
-        end
-    end
-    return baseDir
-end
-
--- РЕАЛЬНАЯ ходьба через Humanoid:Move
-local function moveToPoint(targetPos, killerRoot, lookAt)
-    local myRoot = getRoot()
-    local hum = getHum()
-    if not myRoot or not hum or not targetPos then return end
-
-    local startPos = myRoot.Position
-    local direction = targetPos - startPos
-    direction = Vector3.new(direction.X, 0, direction.Z)
-    local distance = direction.Magnitude
-    if distance < 0.1 then return end
-    direction = direction.Unit
-
-    local origWalkSpeed = hum.WalkSpeed
-    local origAutoRotate = hum.AutoRotate
-
-    -- Скорость подбираем динамически
-    local dodgeSpeed = math.clamp(distance / 0.2, 30, Evade.DodgeSpeed)
-    hum.WalkSpeed = dodgeSpeed
-
-    -- Разворот
-    if lookAt and killerRoot then
-        hum.AutoRotate = false
-        local look = killerRoot.Position - startPos
-        look = Vector3.new(look.X, 0, look.Z)
-        if look.Magnitude > 0.01 then
-            myRoot.CFrame = CFrame.new(startPos, startPos + look.Unit)
-        end
-    else
-        hum.AutoRotate = false
-        myRoot.CFrame = CFrame.new(startPos, startPos + direction)
-    end
-
-    -- Идём к цели настоящей ходьбой
-    local startTick = tick()
-    local timeout = 0.3
-    while tick() - startTick < timeout do
-        if not myRoot.Parent or not hum.Parent then break end
-        local cur = myRoot.Position
-        local rem = Vector3.new(targetPos.X - cur.X, 0, targetPos.Z - cur.Z)
-        if rem.Magnitude < 0.4 then break end
-        hum:Move(rem.Unit)
-        RunService.RenderStepped:Wait()
-    end
-    hum:Move(Vector3.zero)
-
-    task.wait(0.05)
-    if hum and hum.Parent then
-        hum.AutoRotate = origAutoRotate
-        if Movement.WalkSpeedEnabled then
-            hum.WalkSpeed = Movement.WalkSpeedValue
-        else
-            hum.WalkSpeed = origWalkSpeed
-        end
-    end
-end
-
-local function performAttackDodge(killerRoot, killerChar)
-    local myRoot = getRoot()
-    local hum = getHum()
-    if not myRoot or not hum or not killerRoot then return end
-
-    local now = tick()
-    if now - Evade.LastDodgeTime < Evade.DodgeCooldown then return end
-    Evade.LastDodgeTime = now
-
-    Evade.Active = true
-
-    local toKiller = killerRoot.Position - myRoot.Position
-    local flatToKiller = Vector3.new(toKiller.X, 0, toKiller.Z)
-    if flatToKiller.Magnitude < 0.01 then flatToKiller = Vector3.new(0, 0, -1) end
-    flatToKiller = flatToKiller.Unit
-
-    local right = Vector3.new(-flatToKiller.Z, 0, flatToKiller.X)
-
-    -- Определяем сторону удара
-    local sideSign = 0
-    if killerChar then
-        local hum2 = killerChar:FindFirstChildOfClass("Humanoid")
-        if hum2 and hum2.RigType == Enum.HumanoidRigType.R15 then
-            local rightArm = killerChar:FindFirstChild("RightHand") or killerChar:FindFirstChild("RightLowerArm")
-            local leftArm  = killerChar:FindFirstChild("LeftHand")  or killerChar:FindFirstChild("LeftLowerArm")
-            local hrp = killerRoot
-            if rightArm and leftArm then
-                local killerLook = Vector3.new(hrp.CFrame.LookVector.X, 0, hrp.CFrame.LookVector.Z)
-                if killerLook.Magnitude > 0.01 then
-                    killerLook = killerLook.Unit
-                    local rProj = Vector3.new(rightArm.Position.X, 0, rightArm.Position.Z) - Vector3.new(hrp.Position.X, 0, hrp.Position.Z)
-                    local lProj = Vector3.new(leftArm.Position.X, 0, leftArm.Position.Z) - Vector3.new(hrp.Position.X, 0, hrp.Position.Z)
-                    local rDot = rProj:Dot(killerLook)
-                    local lDot = lProj:Dot(killerLook)
-                    if rDot > lDot + 0.3 then
-                        sideSign = 1
-                    elseif lDot > rDot + 0.3 then
-                        sideSign = -1
-                    end
-                end
-            end
-        end
-
-        if sideSign == 0 then
-            local killerVel = killerRoot.AssemblyLinearVelocity
-            local flatVel = Vector3.new(killerVel.X, 0, killerVel.Z)
-            if flatVel.Magnitude > 1.5 then
-                local lateral = right:Dot(flatVel.Unit)
-                if lateral > 0.05 then sideSign = 1
-                elseif lateral < -0.05 then sideSign = -1 end
-            end
-        end
-    end
-
-    if sideSign == 0 then
-        if Evade.AlternateSides then
-            sideSign = -Evade.LastDodgeSide
-        else
-            sideSign = 1
-        end
-    end
-    Evade.LastDodgeSide = sideSign
-
-    local dodgeDir
-    if Evade.DodgeMode == "Side" then
-        dodgeDir = right * -sideSign
-    elseif Evade.DodgeMode == "Back" then
-        dodgeDir = -flatToKiller
-    else
-        dodgeDir = flatToKiller
-    end
-
-    local myPos = myRoot.Position
-    local targetPos = myPos + dodgeDir * Evade.DodgeDistance
-    targetPos = Vector3.new(targetPos.X, myPos.Y, targetPos.Z)
-
-    if not isPointFree(targetPos) then
-        dodgeDir = findFreeDirection(myPos, dodgeDir, Evade.DodgeDistance)
-        targetPos = myPos + dodgeDir * Evade.DodgeDistance
-        targetPos = Vector3.new(targetPos.X, myPos.Y, targetPos.Z)
-    end
-
-    moveToPoint(targetPos, killerRoot, Evade.LookAtKiller)
-
-    Evade.Active = false
-end
-
+-- Определяем сторону удара киллера.
+-- Возвращает 1 (удар слева от нас -> уходим вправо) или -1 (удар справа -> уходим влево)
 local function detectAttackSide(killerRoot)
     local myRoot = getRoot()
     if not myRoot or not killerRoot then return nil end
+
     local toKiller = killerRoot.Position - myRoot.Position
     local flatToKiller = Vector3.new(toKiller.X, 0, toKiller.Z)
     if flatToKiller.Magnitude < 0.01 then return nil end
     flatToKiller = flatToKiller.Unit
+
+    -- Правый вектор относительно нас (смотрим на киллера)
     local myRight = Vector3.new(flatToKiller.Z, 0, -flatToKiller.X)
+
     local killerVel = killerRoot.AssemblyLinearVelocity
     local flatVel = Vector3.new(killerVel.X, 0, killerVel.Z)
+
     local lateral
     if flatVel.Magnitude > 2 then
         lateral = myRight:Dot(flatVel.Unit)
@@ -741,36 +621,93 @@ local function detectAttackSide(killerRoot)
         if flatLook.Magnitude < 0.01 then return nil end
         lateral = myRight:Dot(flatLook.Unit)
     end
-    if lateral > 0.05 then return -1
-    elseif lateral < -0.05 then return 1 end
+
+    -- lateral > 0 => киллер справа/смотрит вправо => удар справа => уходим влево (-1)
+    -- lateral < 0 => удар слева => уходим вправо (+1)
+    if lateral > 0.05 then
+        return -1
+    elseif lateral < -0.05 then
+        return 1
+    end
     return nil
 end
 
+-- Получить финальную точку "за спиной киллера" со смещением в сторону
+local function getBehindPoint(killerRoot, sideOverride)
+    local myRoot = getRoot()
+    if not myRoot or not killerRoot then return nil end
+
+    local killerCF = killerRoot.CFrame
+    local killerLook = killerCF.LookVector
+    local flatLook = Vector3.new(killerLook.X, 0, killerLook.Z)
+    if flatLook.Magnitude < 0.01 then
+        flatLook = Vector3.new(0, 0, -1)
+    end
+    flatLook = flatLook.Unit
+
+    local flatRight = Vector3.new(-flatLook.Z, 0, flatLook.X)
+
+    local sideOffset = sideOverride or Evade.OffsetSide
+
+    local basePos = killerRoot.Position
+        - flatLook * Evade.BehindDistance
+        + flatRight * sideOffset
+
+    local targetPos = Vector3.new(basePos.X, myRoot.Position.Y, basePos.Z)
+
+    if not isPointFree(targetPos) then
+        local fallback = killerRoot.Position - flatLook * (Evade.BehindDistance * 0.5)
+        targetPos = Vector3.new(fallback.X, myRoot.Position.Y, fallback.Z)
+        if not isPointFree(targetPos) then return nil end
+    end
+
+    return targetPos
+end
+
+-- Выход за спину с уклоном в сторону, противоположную удару
 local function performEvadeBehind(killerRoot, sideOverride)
     local myRoot = getRoot()
     local hum = getHum()
     if not myRoot or not hum or not killerRoot then return end
 
+    local targetPos = getBehindPoint(killerRoot, sideOverride)
+    if not targetPos then return end
+
     Evade.Active = true
 
-    local toKiller = killerRoot.Position - myRoot.Position
-    local flatToKiller = Vector3.new(toKiller.X, 0, toKiller.Z)
-    if flatToKiller.Magnitude < 0.01 then flatToKiller = Vector3.new(0, 0, -1) end
-    flatToKiller = flatToKiller.Unit
+    if Evade.Teleport then
+        myRoot.CFrame = CFrame.new(targetPos, targetPos + killerRoot.CFrame.LookVector)
+        if Evade.LookAtKiller then
+            local look = killerRoot.Position - targetPos
+            look = Vector3.new(look.X, 0, look.Z)
+            if look.Magnitude > 0.01 then
+                myRoot.CFrame = CFrame.new(targetPos, targetPos + look.Unit)
+            end
+        end
+    else
+        local startPos = myRoot.Position
+        local startTick = tick()
+        while tick() - startTick < Evade.Duration do
+            if not myRoot.Parent or not killerRoot.Parent then break end
+            local alpha = (tick() - startTick) / Evade.Duration
+            local eased = alpha < 0.5 and 2*alpha*alpha or 1 - ((-2*alpha + 2)^2)/2
+            local cur = startPos:Lerp(targetPos, eased)
+            local look = killerRoot.Position - cur
+            look = Vector3.new(look.X, 0, look.Z)
+            local lookCF = look.Magnitude > 0.01
+                and CFrame.new(cur, cur + look.Unit)
+                or CFrame.new(cur)
+            myRoot.CFrame = lookCF
+            RunService.RenderStepped:Wait()
+        end
+    end
 
-    local right = Vector3.new(-flatToKiller.Z, 0, flatToKiller.X)
-    local sideOffset = sideOverride or Evade.OffsetSide
-    local moveDir = (flatToKiller + right * sideOffset * 0.5).Unit
-
-    -- Идём мимо киллера вперёд (окажемся сзади)
-    local targetPos = myRoot.Position + moveDir * (Evade.BehindDistance + 5)
-    targetPos = Vector3.new(targetPos.X, myRoot.Position.Y, targetPos.Z)
-
-    moveToPoint(targetPos, killerRoot, Evade.LookAtKiller)
-
+    hum:Move(Vector3.zero)
+    task.wait(0.05)
     Evade.Active = false
 end
 
+-- Старое поведение (дуга)
 local function performEvadeArc(killerRoot)
     local myRoot = getRoot()
     local hum = getHum()
@@ -778,33 +715,38 @@ local function performEvadeArc(killerRoot)
 
     local center = Vector3.new(killerRoot.Position.X, myRoot.Position.Y, killerRoot.Position.Z)
     local startPos = myRoot.Position
+
     local toMe = startPos - center
     local flat = Vector3.new(toMe.X, 0, toMe.Z)
     local currentR = flat.Magnitude
     local r = math.max(currentR, Evade.SafeDistance)
+
     local startAngle = math.atan2(flat.Z, flat.X)
     local totalAngle = math.rad(Evade.Angle) * Evade.Direction
     local duration = Evade.Duration
     local startTick = tick()
 
     Evade.Active = true
-    local origSpeed = hum.WalkSpeed
-    hum.WalkSpeed = Evade.DodgeSpeed
 
     while tick() - startTick < duration do
         if not myRoot.Parent or not killerRoot.Parent then break end
         local progress = (tick() - startTick) / duration
         local eased = progress < 0.5 and 2 * progress * progress or 1 - ((-2 * progress + 2) ^ 2) / 2
         local angle = startAngle + totalAngle * eased
-        local targetPos = Vector3.new(center.X + math.cos(angle) * r, startPos.Y, center.Z + math.sin(angle) * r)
+        local targetPos = Vector3.new(
+            center.X + math.cos(angle) * r,
+            startPos.Y,
+            center.Z + math.sin(angle) * r
+        )
         local direction = targetPos - myRoot.Position
         direction = Vector3.new(direction.X, 0, direction.Z)
-        if direction.Magnitude > 0.1 then hum:Move(direction.Unit) end
+        if direction.Magnitude > 0.1 then
+            hum:Move(direction.Unit)
+        end
         RunService.RenderStepped:Wait()
     end
+
     hum:Move(Vector3.zero)
-    task.wait(0.05)
-    if hum and hum.Parent then hum.WalkSpeed = origSpeed end
     Evade.Active = false
 end
 
@@ -816,7 +758,6 @@ local function performEvade(killerRoot, sideOverride)
     end
 end
 
--- Цикл: подход киллера
 task.spawn(function()
     while task.wait(0.05) do
         if not Evade.Enabled or Evade.Active then continue end
@@ -847,7 +788,7 @@ task.spawn(function()
                             local flatVel = Vector3.new(killerVel.X, 0, killerVel.Z)
                             local approaching = true
                             if Evade.RequireApproach and flatVel.Magnitude > 2 then
-                                local toMe = myRoot.Position - hrp.Position
+                                local toMe = (myRoot.Position - hrp.Position)
                                 local flatToMe = Vector3.new(toMe.X, 0, toMe.Z).Unit
                                 local velDot = flatVel.Unit:Dot(flatToMe)
                                 if velDot < 0.3 then
@@ -874,8 +815,6 @@ task.spawn(function()
         end
     end
 end)
-
--- ============== REST ==============
 
 local lastParry = 0
 local PARRY_DEBOUNCE = 0.2
@@ -955,7 +894,6 @@ local function applyWalkSpeed()
     if WalkSpeedConnection then WalkSpeedConnection:Disconnect() WalkSpeedConnection = nil end
     WalkSpeedConnection = RunService.Heartbeat:Connect(function()
         if not Movement.WalkSpeedEnabled then return end
-        if Evade.Active then return end
         local hum = getHum()
         if not hum then return end
         if shouldDisableWalkSpeed() then return end
@@ -1270,7 +1208,32 @@ local function pressRightClick()
     VirtualInputManager:SendMouseButtonEvent(0, 0, 1, false, game, 0)
 end
 
+local AttackPaths = {
+    "Slasher-mob.Controls.attack",
+    "Masked-mob.Controls.attack",
+    "Killer-mob.Controls.attack"
+}
+
 local function GetParryButton()
+    local current = PlayerGui
+    for segment in string.gmatch("Survivor-mob.Controls.Gui-mob", "[^%.]+") do
+        current = current and current:FindFirstChild(segment)
+    end
+    return current
+end
+
+local function GetAttackAimButton()
+    for _, path in ipairs(AttackPaths) do
+        local current = PlayerGui
+        for segment in string.gmatch(path, "[^%.]+") do
+            current = current and current:FindFirstChild(segment)
+        end
+        if current and current:IsA("GuiObject") then return current end
+    end
+    return nil
+end
+
+local function GetGunAimButton()
     local current = PlayerGui
     for segment in string.gmatch("Survivor-mob.Controls.Gui-mob", "[^%.]+") do
         current = current and current:FindFirstChild(segment)
@@ -1344,37 +1307,6 @@ local function isFacingTarget(targetChar)
 end
 
 local hookedKillers = {}
-local attackHookKillers = {}
-
-local function hookKillerForEvade(char)
-    if attackHookKillers[char] then return end
-    attackHookKillers[char] = true
-    local hum = char:FindFirstChildOfClass("Humanoid")
-    if not hum then return end
-    local animator = hum:FindFirstChildOfClass("Animator")
-    if not animator then
-        animator = hum:WaitForChild("Animator", 5)
-        if not animator then return end
-    end
-    animator.AnimationPlayed:Connect(function(track)
-        if not Evade.Enabled or not Evade.ReactToAttack then return end
-        if Evade.Active then return end
-        local anim = track.Animation
-        if not anim then return end
-        local id = anim.AnimationId:match("%d+")
-        if not id then return end
-        local fullId = "rbxassetid://" .. id
-        if KillerAnims[fullId] then
-            local killerRoot = char:FindFirstChild("HumanoidRootPart")
-            local myRoot = getRoot()
-            if not killerRoot or not myRoot then return end
-            local dist = (killerRoot.Position - myRoot.Position).Magnitude
-            if dist <= Evade.AttackRange then
-                task.spawn(function() performAttackDodge(killerRoot, char) end)
-            end
-        end
-    end)
-end
 
 local function hookKiller(char)
     if hookedKillers[char] then return end
@@ -1432,6 +1364,22 @@ local function getClosestGunTarget()
                             shortest = dist
                             closest = hrp
                         end
+                    end
+                end
+            end
+        end
+    end
+    if GunAim.TargetMode == "SCP" then
+        for obj in pairs(CachedSCP) do
+            if obj and obj.Parent then
+                local part
+                if obj:IsA("Model") then part = obj.PrimaryPart or obj:FindFirstChildWhichIsA("BasePart")
+                elseif obj:IsA("BasePart") then part = obj end
+                if part then
+                    local pos, visible = cam:WorldToViewportPoint(part.Position)
+                    if visible then
+                        local dist = (Vector2.new(pos.X, pos.Y) - center).Magnitude
+                        if dist < shortest then shortest = dist closest = part end
                     end
                 end
             end
@@ -1696,6 +1644,59 @@ local function applyCameraFOV()
     else cam.FieldOfView = CameraZoom.DefaultFOV end
 end
 
+local JerkTool = { Enabled = false, ToolName = "Jerk Off" }
+local currentJerkTool = nil
+
+local function createJerkTool()
+    if currentJerkTool then currentJerkTool:Destroy() end
+    local speaker = LocalPlayer
+    local character = speaker.Character
+    if not character then return end
+    local humanoid = character:FindFirstChildWhichIsA("Humanoid")
+    local backpack = speaker:FindFirstChildWhichIsA("Backpack")
+    if not humanoid or not backpack then return end
+    local tool = Instance.new("Tool")
+    tool.Name = JerkTool.ToolName
+    tool.ToolTip = "in the stripped club."
+    tool.RequiresHandle = false
+    tool.Parent = backpack
+    currentJerkTool = tool
+    local jorkin = false
+    local track = nil
+    local function stopTomfoolery()
+        jorkin = false
+        if track then track:Stop() track = nil end
+    end
+    tool.Equipped:Connect(function() jorkin = true end)
+    tool.Unequipped:Connect(stopTomfoolery)
+    humanoid.Died:Connect(stopTomfoolery)
+    task.spawn(function()
+        while task.wait() do
+            if not JerkTool.Enabled or not jorkin then
+                if track then track:Stop() end
+                continue
+            end
+            local isR15 = humanoid.RigType == Enum.HumanoidRigType.R15
+            if not track then
+                local anim = Instance.new("Animation")
+                anim.AnimationId = not isR15 and "rbxassetid://72042024" or "rbxassetid://698251653"
+                track = humanoid:LoadAnimation(anim)
+            end
+            track:Play()
+            track:AdjustSpeed(isR15 and 0.7 or 0.65)
+            track.TimePosition = 0.6
+            task.wait(0.1)
+            while track and track.TimePosition < (not isR15 and 0.65 or 0.7) do task.wait(0.1) end
+            if track then track:Stop() end
+        end
+    end)
+end
+
+LocalPlayer.CharacterAdded:Connect(function()
+    task.wait(1)
+    if JerkTool.Enabled then createJerkTool() end
+end)
+
 local function teleportToFinishLine()
     local root = getRoot()
     if not root then return end
@@ -1930,6 +1931,70 @@ for _, obj in ipairs(workspace:GetDescendants()) do cacheObject(obj) end
 workspace.DescendantAdded:Connect(cacheObject)
 workspace.DescendantRemoving:Connect(removeCache)
 
+local Emote = { Selected = "Mannrobics" }
+local EmoteButton = { Show = false, GuiInstance = nil }
+local EmoteList = { "Mannrobics", "Arm Swing", "Schadenfreude", "Kyoufuu", "Backflip", "Griddy", "Friday Night", "Floating Rest", "OnePlays", "Quick Combo", "WarCry", "Wave" }
+
+local EmoteRemote = ReplicatedStorage:WaitForChild("Remotes"):WaitForChild("EmoteHandler")
+
+local function playEmote(name)
+    pcall(function() EmoteRemote:FireServer(name) end)
+end
+
+local function createEmoteButton()
+    if EmoteButton.GuiInstance then EmoteButton.GuiInstance:Destroy() end
+    local gui = Instance.new("ScreenGui")
+    gui.Name = "EmoteButtonGui"
+    gui.ResetOnSpawn = false
+    gui.Parent = PlayerGui
+    local btn = Instance.new("ImageButton")
+    btn.Size = UDim2.new(0, 60, 0, 60)
+    btn.Position = UDim2.new(0.55, 0, 0.75, 0)
+    btn.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
+    btn.BackgroundTransparency = 0.9
+    btn.Parent = gui
+    local corner = Instance.new("UICorner")
+    corner.CornerRadius = UDim.new(0, 0)
+    corner.Parent = btn
+    local stroke = Instance.new("UIStroke")
+    stroke.ApplyStrokeMode = Enum.ApplyStrokeMode.Border
+    stroke.Thickness = 1.5
+    stroke.Color = Color3.fromRGB(255, 255, 255)
+    stroke.Transparency = 0.8
+    stroke.Parent = btn
+    local img = Instance.new("ImageLabel")
+    img.Size = UDim2.fromScale(0.8, 0.8)
+    img.Position = UDim2.fromScale(0.1, 0.1)
+    img.BackgroundTransparency = 1
+    img.Image = LOGO_ID
+    img.Parent = btn
+    local label = Instance.new("TextLabel")
+    label.Size = UDim2.new(0, 100, 0, 20)
+    label.Position = UDim2.new(0.5, -50, -0.6, 0)
+    label.BackgroundTransparency = 1
+    label.Text = Emote.Selected
+    label.TextColor3 = Color3.fromRGB(255, 255, 255)
+    label.TextStrokeTransparency = 0.5
+    label.Font = Enum.Font.GothamBold
+    label.TextSize = 12
+    label.Parent = btn
+    btn.MouseButton1Click:Connect(function()
+        playEmote(Emote.Selected)
+        stroke.Color = Color3.fromRGB(180, 80, 255)
+        task.delay(0.3, function() stroke.Color = Color3.fromRGB(255, 255, 255) end)
+    end)
+    EmoteButton.GuiInstance = gui
+    EmoteButton.LabelRef = label
+end
+
+local function removeEmoteButton()
+    if EmoteButton.GuiInstance then
+        EmoteButton.GuiInstance:Destroy()
+        EmoteButton.GuiInstance = nil
+        EmoteButton.LabelRef = nil
+    end
+end
+
 local lastESPUpdate = 0
 local lastKillerUpdate = 0
 local lastGodMode = 0
@@ -2120,11 +2185,12 @@ end
 
 task.spawn(function()
     while true do
-        task.wait(0.5)
-        for _, p in pairs(Players:GetPlayers()) do
-            if p ~= LocalPlayer and p.Character and p.Team and p.Team.Name == "Killer" then
-                if Auto.Parry then hookKiller(p.Character) end
-                if Evade.Enabled and Evade.ReactToAttack then hookKillerForEvade(p.Character) end
+        task.wait(0.8)
+        if Auto.Parry then
+            for _, p in pairs(Players:GetPlayers()) do
+                if p ~= LocalPlayer and p.Character and p.Team and p.Team.Name == "Killer" then
+                    hookKiller(p.Character)
+                end
             end
         end
     end
@@ -2136,16 +2202,21 @@ InfoBox:AddLabel("Script: BRUTALSCRIPT")
 InfoBox:AddLabel("Version: 1.0.0")
 InfoBox:AddLabel("Game: Violence District")
 InfoBox:AddLabel("Dev: BRUTALSCRIPT TEAM")
+InfoBox:AddLabel("Key bound to account")
 
-CreditsBox:AddLabel("Developer: BRUTALSCRIPT")
+CreditsBox:AddLabel("Developer:")
+CreditsBox:AddLabel("• BRUTALSCRIPT")
 CreditsBox:AddDivider()
-CreditsBox:AddLabel("Library: Obsidian UI")
+CreditsBox:AddLabel("Library:")
+CreditsBox:AddLabel("• Obsidian UI")
 
--- ESP
 local SurvivorESP = ESPBox:AddCheckbox("SurvivorESP", {
     Text = "ESP Survivor",
     Default = false,
-    Callback = function(v) ESP.Survivor = v Notify("ESP Survivor", v) end
+    Callback = function(v)
+        ESP.Survivor = v
+        Notify("ESP Survivor", v)
+    end
 })
 SurvivorESP:AddColorPicker("SurvivorESPColor", {
     Default = TeamColors.Survivor,
@@ -2156,7 +2227,10 @@ SurvivorESP:AddColorPicker("SurvivorESPColor", {
 local KillerESP = ESPBox:AddCheckbox("KillerESP", {
     Text = "ESP Killer",
     Default = false,
-    Callback = function(v) ESP.Killer = v Notify("ESP Killer", v) end
+    Callback = function(v)
+        ESP.Killer = v
+        Notify("ESP Killer", v)
+    end
 })
 KillerESP:AddColorPicker("KillerESPColor", {
     Default = TeamColors.Killer,
@@ -2167,7 +2241,10 @@ KillerESP:AddColorPicker("KillerESPColor", {
 local ESPGeneratorToggle = ESPBox:AddCheckbox("ESPGenerator", {
     Text = "Generator",
     Default = false,
-    Callback = function(v) ESP.Generator = v Notify("ESP Generator", v) end
+    Callback = function(v)
+        ESP.Generator = v
+        Notify("ESP Generator", v)
+    end
 })
 ESPGeneratorToggle:AddColorPicker("GeneratorColor", {
     Default = GeneratorColor,
@@ -2178,7 +2255,10 @@ ESPGeneratorToggle:AddColorPicker("GeneratorColor", {
 local ESPSCPToggle = ESPBox:AddCheckbox("ESPSCP", {
     Text = "SCP",
     Default = false,
-    Callback = function(v) ESP.SCP = v Notify("ESP SCP", v) end
+    Callback = function(v)
+        ESP.SCP = v
+        Notify("ESP SCP", v)
+    end
 })
 ESPSCPToggle:AddColorPicker("SCPColor", {
     Default = SCPColor,
@@ -2189,7 +2269,10 @@ ESPSCPToggle:AddColorPicker("SCPColor", {
 local ESPPalletToggle = ESPBox:AddCheckbox("ESPPallet", {
     Text = "Pallet",
     Default = false,
-    Callback = function(v) ESP.Pallet = v Notify("ESP Pallet", v) end
+    Callback = function(v)
+        ESP.Pallet = v
+        Notify("ESP Pallet", v)
+    end
 })
 ESPPalletToggle:AddColorPicker("PalletColor", {
     Default = PalletColor,
@@ -2200,7 +2283,10 @@ ESPPalletToggle:AddColorPicker("PalletColor", {
 local ESPWindowToggle = ESPBox:AddCheckbox("ESPWindow", {
     Text = "Window",
     Default = false,
-    Callback = function(v) ESP.Window = v Notify("ESP Window", v) end
+    Callback = function(v)
+        ESP.Window = v
+        Notify("ESP Window", v)
+    end
 })
 ESPWindowToggle:AddColorPicker("WindowColor", {
     Default = WindowColor,
@@ -2210,14 +2296,20 @@ ESPWindowToggle:AddColorPicker("WindowColor", {
 
 ESPBox:AddSlider("ESPDistance", {
     Text = "ESP Radius",
-    Default = 100, Min = 10, Max = 1000, Rounding = 0,
+    Default = 100,
+    Min = 10,
+    Max = 1000,
+    Rounding = 0,
     Callback = function(v) ESP.Distance = v end
 })
 
 ESPStatusBox:AddCheckbox("EnableStatus", {
     Text = "Enable Status ESP",
     Default = false,
-    Callback = function(v) ESPStatus.Enabled = v Notify("Status ESP", v) end
+    Callback = function(v)
+        ESPStatus.Enabled = v
+        Notify("Status ESP", v)
+    end
 })
 ESPStatusBox:AddCheckbox("ShowName", {
     Text = "Show Name",
@@ -2236,15 +2328,20 @@ ESPStatusBox:AddCheckbox("ShowHealth", {
 })
 ESPStatusBox:AddSlider("StatusRadius", {
     Text = "Status Radius",
-    Default = 100, Min = 20, Max = 500, Rounding = 0,
+    Default = 100,
+    Min = 20,
+    Max = 500,
+    Rounding = 0,
     Callback = function(v) ESPStatus.Radius = v end
 })
 
--- CROSSHAIR
 local CrosshairToggle = CrosshairBox:AddCheckbox("CrosshairEnabled", {
     Text = "Enable Crosshair",
     Default = false,
-    Callback = function(v) Crosshair.Enabled = v Notify("Crosshair", v) end
+    Callback = function(v)
+        Crosshair.Enabled = v
+        Notify("Crosshair", v)
+    end
 })
 CrosshairToggle:AddColorPicker("CrosshairColor", {
     Default = Color3.fromRGB(255,255,255),
@@ -2254,19 +2351,28 @@ CrosshairToggle:AddColorPicker("CrosshairColor", {
 })
 CrosshairBox:AddDropdown("Style", {
     Values = {"Plus","Dot","Circle"},
-    Default = 1, Multi = false, Text = "Style",
+    Default = 1,
+    Multi = false,
+    Text = "Style",
     Callback = function(v) Crosshair.Style = v end
 })
 CrosshairBox:AddSlider("CrosshairPosX", {
-    Text = "Position X", Default = 0, Min = -100, Max = 100, Rounding = 0,
+    Text = "Position X",
+    Default = 0,
+    Min = -100,
+    Max = 100,
+    Rounding = 0,
     Callback = function(v) Crosshair.OffsetX = v end
 })
 CrosshairBox:AddSlider("CrosshairPosY", {
-    Text = "Position Y", Default = 0, Min = -100, Max = 100, Rounding = 0,
+    Text = "Position Y",
+    Default = 0,
+    Min = -100,
+    Max = 100,
+    Rounding = 0,
     Callback = function(v) Crosshair.OffsetY = v end
 })
 
--- ABILITY TAB
 AbilityTab:AddCheckbox("Skill", {
     Text = "Auto Skill Check",
     Default = false,
@@ -2298,7 +2404,10 @@ AbilityTab:AddCheckbox("FastVault", {
 })
 AbilityTab:AddSlider("VaultSpeed", {
     Text = "Animation Speed",
-    Default = 1.2, Min = 1, Max = 5, Rounding = 1,
+    Default = 1.2,
+    Min = 1,
+    Max = 5,
+    Rounding = 1,
     Callback = function(v) FastVault.Speed = v end
 })
 
@@ -2330,12 +2439,18 @@ AbilityTab:AddLabel("Moonwalk Keybind"):AddKeyPicker("MoonwalkKey", {
 
 AbilityTab:AddSlider("MoonwalkSpamSpeed", {
     Text = "Spam Speed",
-    Default = Moonwalk.SpamSpeed, Min = 1, Max = 50, Rounding = 0,
+    Default = Moonwalk.SpamSpeed,
+    Min = 1,
+    Max = 50,
+    Rounding = 0,
     Callback = function(Value) Moonwalk.SpamSpeed = Value end
 })
 AbilityTab:AddSlider("MoonwalkIntensity", {
     Text = "Intensity",
-    Default = Moonwalk.Intensity, Min = 1, Max = 50, Rounding = 1,
+    Default = Moonwalk.Intensity,
+    Min = 1,
+    Max = 50,
+    Rounding = 1,
     Callback = function(Value) Moonwalk.Intensity = Value end
 })
 AbilityTab:AddButton({
@@ -2356,126 +2471,125 @@ AbilityTab:AddLabel("Side Step Evade Keybind"):AddKeyPicker("EvadeBind", {
 })
 
 AbilityTab:AddCheckbox("EvadeEnable", {
-    Text = "Side Step Evade",
+    Text = "Side Step Evade (behind killer)",
     Default = false,
-    Callback = function(v) Evade.Enabled = v Notify("Side Step Evade", v) end
+    Callback = function(v)
+        Evade.Enabled = v
+        Notify("Side Step Evade", v)
+    end
 })
-
-AbilityTab:AddToggle("EvadeReactAttack", {
-    Text = "⚡ Уворот от удара (главное)",
-    Default = true,
-    Callback = function(v) Evade.ReactToAttack = v Notify("Уворот от удара", v) end
-})
-
-AbilityTab:AddDropdown("EvadeDodgeMode", {
-    Text = "Режим уворота",
-    Values = { "Side", "Back", "Behind" },
-    Default = 1, Multi = false,
-    Callback = function(v) Evade.DodgeMode = v Notify("Режим уворота: " .. v, true) end
-})
-
-AbilityTab:AddSlider("EvadeDodgeDist", {
-    Text = "Дистанция уворота",
-    Default = 12, Min = 5, Max = 30, Rounding = 0,
-    Callback = function(v) Evade.DodgeDistance = v end
-})
-AbilityTab:AddSlider("EvadeAttackRange", {
-    Text = "Реакция на удар (дистанция)",
-    Default = 12, Min = 5, Max = 25, Rounding = 0,
-    Callback = function(v) Evade.AttackRange = v end
-})
-AbilityTab:AddSlider("EvadeDodgeCooldown", {
-    Text = "Антиспам уворота",
-    Default = 0.35, Min = 0.1, Max = 1, Rounding = 2,
-    Callback = function(v) Evade.DodgeCooldown = v end
-})
-AbilityTab:AddSlider("EvadeDodgeSpeed", {
-    Text = "Скорость уворота (WalkSpeed)",
-    Default = 55, Min = 20, Max = 120, Rounding = 0,
-    Callback = function(v) Evade.DodgeSpeed = v end
-})
-AbilityTab:AddToggle("EvadeAlternateSides", {
-    Text = "Чередовать стороны",
-    Default = true,
-    Callback = function(v) Evade.AlternateSides = v Notify("Чередовать стороны", v) end
-})
-AbilityTab:AddToggle("EvadePredictAim", {
-    Text = "Предугадывать движение киллера",
-    Default = true,
-    Callback = function(v) Evade.PredictAim = v Notify("Предугадывание", v) end
-})
-
-AbilityTab:AddDivider()
 
 AbilityTab:AddDropdown("EvadeMode", {
-    Text = "Evade Mode (подход)",
+    Text = "Evade Mode",
     Values = { "Behind", "Arc" },
-    Default = 1, Multi = false,
+    Default = 1,
+    Multi = false,
     Callback = function(v) Evade.Mode = v end
 })
+
 AbilityTab:AddSlider("EvadeRadius", {
     Text = "Trigger Radius",
-    Default = 15, Min = 5, Max = 40, Rounding = 0,
+    Default = 15,
+    Min = 5,
+    Max = 40,
+    Rounding = 0,
     Callback = function(v) Evade.Radius = v end
 })
+
 AbilityTab:AddSlider("EvadeSafeDist", {
     Text = "Safe Distance",
-    Default = 10, Min = 4, Max = 30, Rounding = 1,
+    Default = 10,
+    Min = 4,
+    Max = 30,
+    Rounding = 1,
     Callback = function(v) Evade.SafeDistance = v end
 })
+
 AbilityTab:AddSlider("EvadeBehindDist", {
     Text = "Behind Distance",
-    Default = 3, Min = 1, Max = 10, Rounding = 1,
+    Default = 3,
+    Min = 1,
+    Max = 10,
+    Rounding = 1,
     Callback = function(v) Evade.BehindDistance = v end
 })
+
 AbilityTab:AddSlider("EvadeOffsetSide", {
     Text = "Side Offset",
-    Default = 0, Min = -5, Max = 5, Rounding = 1,
+    Default = 0,
+    Min = -5,
+    Max = 5,
+    Rounding = 1,
     Callback = function(v) Evade.OffsetSide = v end
 })
+
 AbilityTab:AddToggle("EvadeDodgeAttack", {
-    Text = "Dodge Attack Side (подход)",
+    Text = "Dodge Attack Side",
     Default = true,
     Callback = function(v) Evade.DodgeAttack = v Notify("Dodge Attack Side", v) end
 })
+
+AbilityTab:AddToggle("EvadeTeleport", {
+    Text = "Instant Teleport (else smooth)",
+    Default = true,
+    Callback = function(v) Evade.Teleport = v Notify("Instant Teleport", v) end
+})
+
 AbilityTab:AddToggle("EvadeLookAtKiller", {
     Text = "Look at killer after",
     Default = true,
     Callback = function(v) Evade.LookAtKiller = v Notify("Look at killer", v) end
 })
+
 AbilityTab:AddToggle("EvadeRaycast", {
-    Text = "Wall check",
+    Text = "Wall check (recommended)",
     Default = true,
     Callback = function(v) Evade.UseRaycast = v Notify("Wall Check", v) end
 })
+
 AbilityTab:AddSlider("EvadeDuration", {
     Text = "Evade Duration",
-    Default = 0.8, Min = 0.3, Max = 2, Rounding = 2,
+    Default = 0.8,
+    Min = 0.3,
+    Max = 2,
+    Rounding = 2,
     Callback = function(v) Evade.Duration = v end
 })
+
 AbilityTab:AddSlider("EvadeAngle", {
     Text = "Evade Angle (deg)",
-    Default = 160, Min = 60, Max = 200, Rounding = 0,
+    Default = 160,
+    Min = 60,
+    Max = 200,
+    Rounding = 0,
     Callback = function(v) Evade.Angle = v end
 })
+
 AbilityTab:AddDropdown("EvadeDirection", {
-    Text = "Arc Direction",
+    Text = "Direction",
     Values = { "Right", "Left" },
-    Default = 1, Multi = false,
-    Callback = function(v) Evade.Direction = (v == "Right") and -1 or 1 end
+    Default = 1,
+    Multi = false,
+    Callback = function(v)
+        Evade.Direction = (v == "Right") and -1 or 1
+    end
 })
+
 AbilityTab:AddToggle("EvadeApproach", {
     Text = "Only when killer approaches",
     Default = true,
     Callback = function(v) Evade.RequireApproach = v Notify("Only when approaching", v) end
 })
+
 AbilityTab:AddSlider("EvadeCooldown", {
-    Text = "Evade Cooldown",
-    Default = 2, Min = 0.5, Max = 10, Rounding = 1,
+    Text = "Cooldown",
+    Default = 2,
+    Min = 0.5,
+    Max = 10,
+    Rounding = 1,
     Callback = function(v) Evade.Cooldown = v end
 })
 
--- KILLER TAB
 KillerTab:AddCheckbox("AutoStalk", {
     Text = "Auto Stalk",
     Default = false,
@@ -2506,11 +2620,37 @@ KillerTab:AddCheckbox("AutoAttack", {
 })
 KillerTab:AddSlider("AttackDelay", {
     Text = "Attack Delay",
-    Default = 0.45, Min = 0.1, Max = 1, Rounding = 2,
+    Default = 0.45,
+    Min = 0.1,
+    Max = 1,
+    Rounding = 2,
     Callback = function(v) Killer.AttackDelay = v end
 })
 
--- PARRY
+KillerTab:AddDivider()
+
+KillerTab:AddDropdown("MaskedPowerSelect", {
+    Text = "Select Power",
+    Values = MaskedPowers,
+    Default = 1,
+    Multi = false,
+    Callback = function(val) Masked.CurrentPower = val end
+})
+KillerTab:AddButton("Activate Power", function()
+    local Event = ReplicatedStorage:FindFirstChild("Remotes", true)
+        and ReplicatedStorage.Remotes:FindFirstChild("Killers", true)
+        and ReplicatedStorage.Remotes.Killers:FindFirstChild("Masked", true)
+        and ReplicatedStorage.Remotes.Killers.Masked:FindFirstChild("Activatepower")
+    if Event then Event:FireServer(Masked.CurrentPower) end
+end)
+KillerTab:AddButton("Deactivate Power", function()
+    local Event = ReplicatedStorage:FindFirstChild("Remotes", true)
+        and ReplicatedStorage.Remotes:FindFirstChild("Killers", true)
+        and ReplicatedStorage.Remotes.Killers:FindFirstChild("Masked", true)
+        and ReplicatedStorage.Remotes.Killers.Masked:FindFirstChild("Deactivatepower")
+    if Event then Event:FireServer() end
+end)
+
 local AutoParryToggle = ParryBox:AddCheckbox("AutoParry", {
     Text = "Auto Parry",
     Default = false,
@@ -2540,16 +2680,21 @@ ParryBox:AddCheckbox("ShowParryRange", {
 })
 ParryBox:AddSlider("ParryDistance", {
     Text = "Distance",
-    Default = 15, Min = 5, Max = 20, Rounding = 0,
+    Default = 15,
+    Min = 5,
+    Max = 20,
+    Rounding = 0,
     Callback = function(v) Auto.ParryDistance = v end
 })
 ParryBox:AddSlider("FaceSensitivity", {
     Text = "Face Sensitivity Killer",
-    Default = 0.7, Min = -1, Max = 1, Rounding = 2,
+    Default = 0.7,
+    Min = -1,
+    Max = 1,
+    Rounding = 2,
     Callback = function(v) Auto.FaceSensitivity = v end
 })
 
--- AIMLOCK
 AimlockBox:AddToggle("GunAimEnabled", {
     Text = "Aim Lock",
     Default = false,
@@ -2557,7 +2702,8 @@ AimlockBox:AddToggle("GunAimEnabled", {
 })
 AimlockBox:AddDropdown("GunAimTarget", {
     Values = { "Killer", "Survivor", "SCP" },
-    Default = 1, Text = "Target",
+    Default = 1,
+    Text = "Target",
     Callback = function(v) GunAim.TargetMode = v end
 })
 AimlockBox:AddDropdown("GunAimPart", {
@@ -2568,16 +2714,21 @@ AimlockBox:AddDropdown("GunAimPart", {
 })
 AimlockBox:AddSlider("GunAimFOV", {
     Text = "FOV",
-    Default = 250, Min = 50, Max = 1000, Rounding = 0,
+    Default = 250,
+    Min = 50,
+    Max = 1000,
+    Rounding = 0,
     Callback = function(v) GunAim.FOV = v end
 })
 AimlockBox:AddSlider("GunAimPredict", {
     Text = "Prediction",
-    Default = 0.12, Min = 0, Max = 1, Rounding = 2,
+    Default = 0.12,
+    Min = 0,
+    Max = 1,
+    Rounding = 2,
     Callback = function(v) GunAim.PredictStrength = v end
 })
 
--- MOVEMENT
 MovementBox:AddCheckbox("WalkSpeedToggle", {
     Text = "Walk Speed",
     Default = false,
@@ -2593,7 +2744,10 @@ MovementBox:AddCheckbox("WalkSpeedToggle", {
 })
 MovementBox:AddSlider("WalkSpeedSlider", {
     Text = "Walk Speed Value",
-    Default = 17.6, Min = 16, Max = 32, Rounding = 1,
+    Default = 17.6,
+    Min = 16,
+    Max = 32,
+    Rounding = 1,
     Callback = function(v)
         Movement.WalkSpeedValue = v
         if Movement.WalkSpeedEnabled then applyWalkSpeed() end
@@ -2619,14 +2773,53 @@ MovementBox:AddCheckbox("JumpPowerToggle", {
 })
 MovementBox:AddSlider("JumpPowerSlider", {
     Text = "Jump Power Value",
-    Default = 50, Min = 0, Max = 300, Rounding = 0,
+    Default = 50,
+    Min = 0,
+    Max = 300,
+    Rounding = 0,
     Callback = function(v)
         Movement.JumpPowerValue = v
         if Movement.JumpPowerEnabled then applyJumpPower() end
     end
 })
 
--- VISUAL
+EmoteBox:AddDropdown("SelectEmote", {
+    Values = EmoteList,
+    Default = 1,
+    Multi = false,
+    Text = "Select Emote",
+    Callback = function(v)
+        Emote.Selected = v
+        if EmoteButton.LabelRef then EmoteButton.LabelRef.Text = v end
+    end
+})
+EmoteBox:AddButton({
+    Text = "Play Emote",
+    Func = function() playEmote(Emote.Selected) end
+})
+EmoteBox:AddToggle("ShowEmoteButton", {
+    Text = "Show Emote Button",
+    Default = false,
+    Callback = function(v)
+        EmoteButton.Show = v
+        if v then createEmoteButton() else removeEmoteButton() end
+        Notify("Emote Button", v)
+    end
+})
+
+FunBox:AddToggle("JerkTool", {
+    Text = "Jerk Tool",
+    Default = false,
+    Callback = function(v)
+        JerkTool.Enabled = v
+        if v then createJerkTool()
+        else
+            if currentJerkTool then currentJerkTool:Destroy() currentJerkTool = nil end
+        end
+        Notify("Jerk Tool", v)
+    end
+})
+
 VisualBox:AddCheckbox("Fullbright", {
     Text = "Fullbright",
     Default = false,
@@ -2653,7 +2846,6 @@ VisualBox:AddCheckbox("CleanSky", {
     Callback = function(v) Visual.CleanSky = v applyOptimization() Notify("Clean Sky", v) end
 })
 
--- ZOOM
 ZoomBox:AddToggle("UnlimitedZoom", {
     Text = "Unlimited Zoom Out",
     Default = false,
@@ -2661,7 +2853,10 @@ ZoomBox:AddToggle("UnlimitedZoom", {
 })
 ZoomBox:AddSlider("MaxZoomDistance", {
     Text = "Max Zoom Distance",
-    Default = 1000, Min = 100, Max = 5000, Rounding = 0,
+    Default = 1000,
+    Min = 100,
+    Max = 5000,
+    Rounding = 0,
     Callback = function(v)
         CameraZoom.MaxDistance = v
         if CameraZoom.UnlimitedZoom then applyUnlimitedZoom() end
@@ -2674,26 +2869,33 @@ ZoomBox:AddToggle("CustomFOV", {
 })
 ZoomBox:AddSlider("CameraFOV", {
     Text = "Camera FOV",
-    Default = 70, Min = 40, Max = 120, Rounding = 0,
+    Default = 70,
+    Min = 40,
+    Max = 120,
+    Rounding = 0,
     Callback = function(Value)
         CameraZoom.FOV = Value
         if CameraZoom.FOVEnabled then applyCameraFOV() end
     end
 })
 
--- TIME
 TimeBox:AddSlider("ClockTime", {
     Text = "Clock Time",
-    Default = 14, Min = 0, Max = 24, Rounding = 0,
+    Default = 14,
+    Min = 0,
+    Max = 24,
+    Rounding = 0,
     Callback = function(v) Visual.ClockTime = v Visual.Ambient = true applyVisual() end
 })
 TimeBox:AddSlider("Brightness", {
     Text = "Brightness",
-    Default = 2, Min = 0, Max = 5, Rounding = 1,
+    Default = 2,
+    Min = 0,
+    Max = 5,
+    Rounding = 1,
     Callback = function(v) Visual.Brightness = v Visual.Ambient = true applyVisual() end
 })
 
--- UI SETTINGS
 SettingBox:AddToggle("ShowCustomCursor", {
     Text = "Custom Cursor",
     Default = not IS_MOBILE,
@@ -2717,7 +2919,10 @@ SettingBox:AddDropdown("DPIDropdown", {
 })
 SettingBox:AddSlider("UICornerSlider", {
     Text = "Corner Radius",
-    Default = Library.CornerRadius, Min = 0, Max = 20, Rounding = 0,
+    Default = Library.CornerRadius,
+    Min = 0,
+    Max = 20,
+    Rounding = 0,
     Callback = function(value) Window:SetCornerRadius(value) end
 })
 SettingBox:AddToggle("WatermarkToggle", {
