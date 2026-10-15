@@ -529,7 +529,7 @@ local Moonwalk = { Enabled = false, ShowButton = false, SpamSpeed = 30, Intensit
 local MoonwalkConnection = nil
 local MoonwalkButton = nil
 
--- ============== SIDE STEP (evade killer, walk imitation) ==============
+-- ============== SIDE STEP (evade killer) ==============
 local Evade = {
     Enabled = false,
     Radius = 15,
@@ -541,13 +541,24 @@ local Evade = {
     Active = false,
     LastTrigger = 0,
     RequireApproach = true,
-    Mode = "Behind",        -- "Behind" (за спину) или "Arc" (старое поведение)
-    BehindDistance = 3,     -- на сколько студов встать за спиной киллера
-    OffsetSide = 0,         -- смещение вбок от спины (студа)
-    Teleport = true,        -- true = мгновенный CFrame, false = плавный lerp
-    LookAtKiller = true,    -- смотреть на киллера после мува
-    UseRaycast = true,      -- проверять, что точка за спиной не в стене
-    DodgeAttack = true,     -- уклоняться в сторону, противоположную удару
+    Mode = "Behind",
+    BehindDistance = 3,
+    OffsetSide = 0,
+    Teleport = true,
+    LookAtKiller = true,
+    UseRaycast = true,
+    DodgeAttack = true,
+
+    -- Уворот от ударов:
+    ReactToAttack = true,
+    DodgeDistance = 12,
+    DodgeMode = "Side",
+    AlternateSides = true,
+    AttackRange = 12,
+    DodgeCooldown = 0.35,
+    PredictAim = true,
+    LastDodgeSide = 1,
+    LastDodgeTime = 0,
 }
 
 local CameraZoom = { UnlimitedZoom = false, MaxDistance = 1000, MinDistance = 0, FOVEnabled = false, FOV = 70, DefaultFOV = workspace.CurrentCamera.FieldOfView }
@@ -584,7 +595,6 @@ end
 
 -- ============== SIDE STEP LOGIC ==============
 
--- Проверка: не в стене ли точка
 local function isPointFree(pos)
     if not Evade.UseRaycast then return true end
     local params = RaycastParams.new()
@@ -595,23 +605,167 @@ local function isPointFree(pos)
     return result ~= nil
 end
 
--- Определяем сторону удара киллера.
--- Возвращает 1 (удар слева от нас -> уходим вправо) или -1 (удар справа -> уходим влево)
+local function findFreeDirection(originPos, baseDir, distance)
+    local attempts = {
+        baseDir,
+        (baseDir + Vector3.new(0, 0, 1)).Unit,
+        (baseDir + Vector3.new(0, 0, -1)).Unit,
+        (baseDir + Vector3.new(1, 0, 0)).Unit,
+        (baseDir + Vector3.new(-1, 0, 0)).Unit,
+    }
+    for _, dir in ipairs(attempts) do
+        local candidate = originPos + dir * distance
+        candidate = Vector3.new(candidate.X, originPos.Y, candidate.Z)
+        if isPointFree(candidate) then
+            return candidate
+        end
+    end
+    return originPos
+end
+
+local function moveToPoint(targetPos, killerRoot, lookAt)
+    local myRoot = getRoot()
+    local hum = getHum()
+    if not myRoot or not hum or not targetPos then return end
+
+    if Evade.Teleport then
+        if lookAt and killerRoot then
+            local look = killerRoot.Position - targetPos
+            look = Vector3.new(look.X, 0, look.Z)
+            if look.Magnitude > 0.01 then
+                myRoot.CFrame = CFrame.new(targetPos, targetPos + look.Unit)
+                return
+            end
+        end
+        myRoot.CFrame = CFrame.new(targetPos)
+    else
+        local startPos = myRoot.Position
+        local dur = math.min(Evade.Duration, 0.25)
+        local startTick = tick()
+        while tick() - startTick < dur do
+            if not myRoot.Parent then break end
+            local alpha = (tick() - startTick) / dur
+            local eased = 1 - (1 - alpha) * (1 - alpha)
+            local cur = startPos:Lerp(targetPos, eased)
+            local cf
+            if lookAt and killerRoot then
+                local look = killerRoot.Position - cur
+                look = Vector3.new(look.X, 0, look.Z)
+                cf = look.Magnitude > 0.01 and CFrame.new(cur, cur + look.Unit) or CFrame.new(cur)
+            else
+                cf = CFrame.new(cur)
+            end
+            myRoot.CFrame = cf
+            RunService.RenderStepped:Wait()
+        end
+    end
+end
+
+-- Уворот от удара
+local function performAttackDodge(killerRoot, killerChar)
+    local myRoot = getRoot()
+    local hum = getHum()
+    if not myRoot or not hum or not killerRoot then return end
+
+    local now = tick()
+    if now - Evade.LastDodgeTime < Evade.DodgeCooldown then return end
+    Evade.LastDodgeTime = now
+
+    Evade.Active = true
+
+    local toKiller = killerRoot.Position - myRoot.Position
+    local flatToKiller = Vector3.new(toKiller.X, 0, toKiller.Z)
+    if flatToKiller.Magnitude < 0.01 then flatToKiller = Vector3.new(0, 0, -1) end
+    flatToKiller = flatToKiller.Unit
+
+    local right = Vector3.new(-flatToKiller.Z, 0, flatToKiller.X)
+
+    -- Определяем сторону удара
+    local sideSign = 0
+    if killerChar then
+        local hum2 = killerChar:FindFirstChildOfClass("Humanoid")
+        if hum2 and hum2.RigType == Enum.HumanoidRigType.R15 then
+            local rightArm = killerChar:FindFirstChild("RightHand") or killerChar:FindFirstChild("RightLowerArm")
+            local leftArm  = killerChar:FindFirstChild("LeftHand")  or killerChar:FindFirstChild("LeftLowerArm")
+            local hrp = killerRoot
+            if rightArm and leftArm then
+                local killerLook = Vector3.new(hrp.CFrame.LookVector.X, 0, hrp.CFrame.LookVector.Z)
+                if killerLook.Magnitude > 0.01 then
+                    killerLook = killerLook.Unit
+                    local rProj = Vector3.new(rightArm.Position.X, 0, rightArm.Position.Z) - Vector3.new(hrp.Position.X, 0, hrp.Position.Z)
+                    local lProj = Vector3.new(leftArm.Position.X, 0, leftArm.Position.Z) - Vector3.new(hrp.Position.X, 0, hrp.Position.Z)
+                    local rDot = rProj:Dot(killerLook)
+                    local lDot = lProj:Dot(killerLook)
+                    if rDot > lDot + 0.3 then
+                        sideSign = 1
+                    elseif lDot > rDot + 0.3 then
+                        sideSign = -1
+                    end
+                end
+            end
+        end
+
+        if sideSign == 0 then
+            local killerVel = killerRoot.AssemblyLinearVelocity
+            local flatVel = Vector3.new(killerVel.X, 0, killerVel.Z)
+            if flatVel.Magnitude > 1.5 then
+                local lateral = right:Dot(flatVel.Unit)
+                if lateral > 0.05 then sideSign = 1
+                elseif lateral < -0.05 then sideSign = -1 end
+            end
+        end
+    end
+
+    if sideSign == 0 then
+        if Evade.AlternateSides then
+            sideSign = -Evade.LastDodgeSide
+        else
+            sideSign = 1
+        end
+    end
+    Evade.LastDodgeSide = sideSign
+
+    local dodgeDir
+    if Evade.DodgeMode == "Side" then
+        dodgeDir = right * -sideSign
+    elseif Evade.DodgeMode == "Back" then
+        dodgeDir = -flatToKiller
+    else
+        dodgeDir = flatToKiller
+    end
+
+    local killerPos = killerRoot.Position
+    if Evade.PredictAim then
+        local vel = killerRoot.AssemblyLinearVelocity
+        killerPos = killerPos + Vector3.new(vel.X, 0, vel.Z) * 0.08
+    end
+
+    local myPos = myRoot.Position
+    local targetPos = myPos + dodgeDir * Evade.DodgeDistance
+    targetPos = Vector3.new(targetPos.X, myPos.Y, targetPos.Z)
+
+    if not isPointFree(targetPos) then
+        targetPos = findFreeDirection(myPos, dodgeDir, Evade.DodgeDistance)
+    end
+
+    moveToPoint(targetPos, killerRoot, Evade.LookAtKiller)
+
+    hum:Move(Vector3.zero)
+    task.wait(0.05)
+    Evade.Active = false
+end
+
+-- Старый Evade: подход киллера
 local function detectAttackSide(killerRoot)
     local myRoot = getRoot()
     if not myRoot or not killerRoot then return nil end
-
     local toKiller = killerRoot.Position - myRoot.Position
     local flatToKiller = Vector3.new(toKiller.X, 0, toKiller.Z)
     if flatToKiller.Magnitude < 0.01 then return nil end
     flatToKiller = flatToKiller.Unit
-
-    -- Правый вектор относительно нас (смотрим на киллера)
     local myRight = Vector3.new(flatToKiller.Z, 0, -flatToKiller.X)
-
     local killerVel = killerRoot.AssemblyLinearVelocity
     local flatVel = Vector3.new(killerVel.X, 0, killerVel.Z)
-
     local lateral
     if flatVel.Magnitude > 2 then
         lateral = myRight:Dot(flatVel.Unit)
@@ -621,60 +775,37 @@ local function detectAttackSide(killerRoot)
         if flatLook.Magnitude < 0.01 then return nil end
         lateral = myRight:Dot(flatLook.Unit)
     end
-
-    -- lateral > 0 => киллер справа/смотрит вправо => удар справа => уходим влево (-1)
-    -- lateral < 0 => удар слева => уходим вправо (+1)
-    if lateral > 0.05 then
-        return -1
-    elseif lateral < -0.05 then
-        return 1
-    end
+    if lateral > 0.05 then return -1
+    elseif lateral < -0.05 then return 1 end
     return nil
 end
 
--- Получить финальную точку "за спиной киллера" со смещением в сторону
 local function getBehindPoint(killerRoot, sideOverride)
     local myRoot = getRoot()
     if not myRoot or not killerRoot then return nil end
-
-    local killerCF = killerRoot.CFrame
-    local killerLook = killerCF.LookVector
+    local killerLook = killerRoot.CFrame.LookVector
     local flatLook = Vector3.new(killerLook.X, 0, killerLook.Z)
-    if flatLook.Magnitude < 0.01 then
-        flatLook = Vector3.new(0, 0, -1)
-    end
+    if flatLook.Magnitude < 0.01 then flatLook = Vector3.new(0, 0, -1) end
     flatLook = flatLook.Unit
-
     local flatRight = Vector3.new(-flatLook.Z, 0, flatLook.X)
-
     local sideOffset = sideOverride or Evade.OffsetSide
-
-    local basePos = killerRoot.Position
-        - flatLook * Evade.BehindDistance
-        + flatRight * sideOffset
-
+    local basePos = killerRoot.Position - flatLook * Evade.BehindDistance + flatRight * sideOffset
     local targetPos = Vector3.new(basePos.X, myRoot.Position.Y, basePos.Z)
-
     if not isPointFree(targetPos) then
         local fallback = killerRoot.Position - flatLook * (Evade.BehindDistance * 0.5)
         targetPos = Vector3.new(fallback.X, myRoot.Position.Y, fallback.Z)
         if not isPointFree(targetPos) then return nil end
     end
-
     return targetPos
 end
 
--- Выход за спину с уклоном в сторону, противоположную удару
 local function performEvadeBehind(killerRoot, sideOverride)
     local myRoot = getRoot()
     local hum = getHum()
     if not myRoot or not hum or not killerRoot then return end
-
     local targetPos = getBehindPoint(killerRoot, sideOverride)
     if not targetPos then return end
-
     Evade.Active = true
-
     if Evade.Teleport then
         myRoot.CFrame = CFrame.new(targetPos, targetPos + killerRoot.CFrame.LookVector)
         if Evade.LookAtKiller then
@@ -694,58 +825,42 @@ local function performEvadeBehind(killerRoot, sideOverride)
             local cur = startPos:Lerp(targetPos, eased)
             local look = killerRoot.Position - cur
             look = Vector3.new(look.X, 0, look.Z)
-            local lookCF = look.Magnitude > 0.01
-                and CFrame.new(cur, cur + look.Unit)
-                or CFrame.new(cur)
+            local lookCF = look.Magnitude > 0.01 and CFrame.new(cur, cur + look.Unit) or CFrame.new(cur)
             myRoot.CFrame = lookCF
             RunService.RenderStepped:Wait()
         end
     end
-
     hum:Move(Vector3.zero)
     task.wait(0.05)
     Evade.Active = false
 end
 
--- Старое поведение (дуга)
 local function performEvadeArc(killerRoot)
     local myRoot = getRoot()
     local hum = getHum()
     if not myRoot or not hum or not killerRoot then return end
-
     local center = Vector3.new(killerRoot.Position.X, myRoot.Position.Y, killerRoot.Position.Z)
     local startPos = myRoot.Position
-
     local toMe = startPos - center
     local flat = Vector3.new(toMe.X, 0, toMe.Z)
     local currentR = flat.Magnitude
     local r = math.max(currentR, Evade.SafeDistance)
-
     local startAngle = math.atan2(flat.Z, flat.X)
     local totalAngle = math.rad(Evade.Angle) * Evade.Direction
     local duration = Evade.Duration
     local startTick = tick()
-
     Evade.Active = true
-
     while tick() - startTick < duration do
         if not myRoot.Parent or not killerRoot.Parent then break end
         local progress = (tick() - startTick) / duration
         local eased = progress < 0.5 and 2 * progress * progress or 1 - ((-2 * progress + 2) ^ 2) / 2
         local angle = startAngle + totalAngle * eased
-        local targetPos = Vector3.new(
-            center.X + math.cos(angle) * r,
-            startPos.Y,
-            center.Z + math.sin(angle) * r
-        )
+        local targetPos = Vector3.new(center.X + math.cos(angle) * r, startPos.Y, center.Z + math.sin(angle) * r)
         local direction = targetPos - myRoot.Position
         direction = Vector3.new(direction.X, 0, direction.Z)
-        if direction.Magnitude > 0.1 then
-            hum:Move(direction.Unit)
-        end
+        if direction.Magnitude > 0.1 then hum:Move(direction.Unit) end
         RunService.RenderStepped:Wait()
     end
-
     hum:Move(Vector3.zero)
     Evade.Active = false
 end
@@ -758,6 +873,7 @@ local function performEvade(killerRoot, sideOverride)
     end
 end
 
+-- Цикл обнаружения подходящего киллера (старый Evade)
 task.spawn(function()
     while task.wait(0.05) do
         if not Evade.Enabled or Evade.Active then continue end
@@ -788,7 +904,7 @@ task.spawn(function()
                             local flatVel = Vector3.new(killerVel.X, 0, killerVel.Z)
                             local approaching = true
                             if Evade.RequireApproach and flatVel.Magnitude > 2 then
-                                local toMe = (myRoot.Position - hrp.Position)
+                                local toMe = myRoot.Position - hrp.Position
                                 local flatToMe = Vector3.new(toMe.X, 0, toMe.Z).Unit
                                 local velDot = flatVel.Unit:Dot(flatToMe)
                                 if velDot < 0.3 then
@@ -815,6 +931,8 @@ task.spawn(function()
         end
     end
 end)
+
+-- ============== REST ==============
 
 local lastParry = 0
 local PARRY_DEBOUNCE = 0.2
@@ -1307,6 +1425,38 @@ local function isFacingTarget(targetChar)
 end
 
 local hookedKillers = {}
+local attackHookKillers = {}
+
+-- Хук для Evade: реагируем на анимацию удара
+local function hookKillerForEvade(char)
+    if attackHookKillers[char] then return end
+    attackHookKillers[char] = true
+    local hum = char:FindFirstChildOfClass("Humanoid")
+    if not hum then return end
+    local animator = hum:FindFirstChildOfClass("Animator")
+    if not animator then
+        animator = hum:WaitForChild("Animator", 5)
+        if not animator then return end
+    end
+    animator.AnimationPlayed:Connect(function(track)
+        if not Evade.Enabled or not Evade.ReactToAttack then return end
+        if Evade.Active then return end
+        local anim = track.Animation
+        if not anim then return end
+        local id = anim.AnimationId:match("%d+")
+        if not id then return end
+        local fullId = "rbxassetid://" .. id
+        if KillerAnims[fullId] then
+            local killerRoot = char:FindFirstChild("HumanoidRootPart")
+            local myRoot = getRoot()
+            if not killerRoot or not myRoot then return end
+            local dist = (killerRoot.Position - myRoot.Position).Magnitude
+            if dist <= Evade.AttackRange then
+                task.spawn(function() performAttackDodge(killerRoot, char) end)
+            end
+        end
+    end)
+end
 
 local function hookKiller(char)
     if hookedKillers[char] then return end
@@ -2185,12 +2335,11 @@ end
 
 task.spawn(function()
     while true do
-        task.wait(0.8)
-        if Auto.Parry then
-            for _, p in pairs(Players:GetPlayers()) do
-                if p ~= LocalPlayer and p.Character and p.Team and p.Team.Name == "Killer" then
-                    hookKiller(p.Character)
-                end
+        task.wait(0.5)
+        for _, p in pairs(Players:GetPlayers()) do
+            if p ~= LocalPlayer and p.Character and p.Team and p.Team.Name == "Killer" then
+                if Auto.Parry then hookKiller(p.Character) end
+                if Evade.Enabled and Evade.ReactToAttack then hookKillerForEvade(p.Character) end
             end
         end
     end
@@ -2471,7 +2620,7 @@ AbilityTab:AddLabel("Side Step Evade Keybind"):AddKeyPicker("EvadeBind", {
 })
 
 AbilityTab:AddCheckbox("EvadeEnable", {
-    Text = "Side Step Evade (behind killer)",
+    Text = "Side Step Evade",
     Default = false,
     Callback = function(v)
         Evade.Enabled = v
@@ -2479,8 +2628,66 @@ AbilityTab:AddCheckbox("EvadeEnable", {
     end
 })
 
+AbilityTab:AddToggle("EvadeReactAttack", {
+    Text = "⚡ Уворот от удара (главное)",
+    Default = true,
+    Callback = function(v) Evade.ReactToAttack = v Notify("Уворот от удара", v) end
+})
+
+AbilityTab:AddDropdown("EvadeDodgeMode", {
+    Text = "Режим уворота",
+    Values = { "Side", "Back", "Behind" },
+    Default = 1,
+    Multi = false,
+    Callback = function(v)
+        Evade.DodgeMode = v
+        Notify("Режим уворота: " .. v, true)
+    end
+})
+
+AbilityTab:AddSlider("EvadeDodgeDist", {
+    Text = "Дистанция уворота",
+    Default = 12,
+    Min = 5,
+    Max = 30,
+    Rounding = 0,
+    Callback = function(v) Evade.DodgeDistance = v end
+})
+
+AbilityTab:AddSlider("EvadeAttackRange", {
+    Text = "Реакция на удар (дистанция)",
+    Default = 12,
+    Min = 5,
+    Max = 25,
+    Rounding = 0,
+    Callback = function(v) Evade.AttackRange = v end
+})
+
+AbilityTab:AddSlider("EvadeDodgeCooldown", {
+    Text = "Антиспам уворота",
+    Default = 0.35,
+    Min = 0.1,
+    Max = 1,
+    Rounding = 2,
+    Callback = function(v) Evade.DodgeCooldown = v end
+})
+
+AbilityTab:AddToggle("EvadeAlternateSides", {
+    Text = "Чередовать стороны",
+    Default = true,
+    Callback = function(v) Evade.AlternateSides = v Notify("Чередовать стороны", v) end
+})
+
+AbilityTab:AddToggle("EvadePredictAim", {
+    Text = "Предугадывать движение киллера",
+    Default = true,
+    Callback = function(v) Evade.PredictAim = v Notify("Предугадывание", v) end
+})
+
+AbilityTab:AddDivider()
+
 AbilityTab:AddDropdown("EvadeMode", {
-    Text = "Evade Mode",
+    Text = "Evade Mode (подход)",
     Values = { "Behind", "Arc" },
     Default = 1,
     Multi = false,
@@ -2524,13 +2731,13 @@ AbilityTab:AddSlider("EvadeOffsetSide", {
 })
 
 AbilityTab:AddToggle("EvadeDodgeAttack", {
-    Text = "Dodge Attack Side",
+    Text = "Dodge Attack Side (подход)",
     Default = true,
     Callback = function(v) Evade.DodgeAttack = v Notify("Dodge Attack Side", v) end
 })
 
 AbilityTab:AddToggle("EvadeTeleport", {
-    Text = "Instant Teleport (else smooth)",
+    Text = "Instant Teleport",
     Default = true,
     Callback = function(v) Evade.Teleport = v Notify("Instant Teleport", v) end
 })
@@ -2542,7 +2749,7 @@ AbilityTab:AddToggle("EvadeLookAtKiller", {
 })
 
 AbilityTab:AddToggle("EvadeRaycast", {
-    Text = "Wall check (recommended)",
+    Text = "Wall check",
     Default = true,
     Callback = function(v) Evade.UseRaycast = v Notify("Wall Check", v) end
 })
@@ -2566,13 +2773,11 @@ AbilityTab:AddSlider("EvadeAngle", {
 })
 
 AbilityTab:AddDropdown("EvadeDirection", {
-    Text = "Direction",
+    Text = "Arc Direction",
     Values = { "Right", "Left" },
     Default = 1,
     Multi = false,
-    Callback = function(v)
-        Evade.Direction = (v == "Right") and -1 or 1
-    end
+    Callback = function(v) Evade.Direction = (v == "Right") and -1 or 1 end
 })
 
 AbilityTab:AddToggle("EvadeApproach", {
@@ -2582,7 +2787,7 @@ AbilityTab:AddToggle("EvadeApproach", {
 })
 
 AbilityTab:AddSlider("EvadeCooldown", {
-    Text = "Cooldown",
+    Text = "Evade Cooldown",
     Default = 2,
     Min = 0.5,
     Max = 10,
