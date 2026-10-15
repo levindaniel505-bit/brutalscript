@@ -5,34 +5,33 @@ if Moonwalk.Enabled and not ParryActive and not isDowned() then
         local hrp = char:FindFirstChild("HumanoidRootPart")
 
         if humanoid and hrp then
-            -- Замедляем скорость
             if Moonwalk.UseSlow and humanoid.WalkSpeed ~= Moonwalk.SlowSpeed then
                 humanoid.WalkSpeed = Moonwalk.SlowSpeed
             end
 
-            -- Отключаем авто-разворот, чтобы самим управлять телом
             if humanoid.AutoRotate then
                 humanoid.AutoRotate = false
             end
 
-            -- Берём ТОЛЬКО вектор движения игрока (из WASD)
             local moveDir = humanoid.MoveDirection
             local flatMove = Vector3.new(moveDir.X, 0, moveDir.Z)
 
             if flatMove.Magnitude > 0.05 then
-                local lookDir = flatMove.Unit
+                -- Тело смотрит ПРОТИВ движения (спиной вперёд = moonwalk)
+                local baseDir = -flatMove.Unit
 
-                -- Тело смотрит ПРОТИВ движения (спиной вперёд)
-                local targetLookDir = -lookDir
+                -- Колебание вправо-влево (синусоида)
+                local swingAngle = math.sin(tick() * Moonwalk.SpamSpeed) * Moonwalk.Intensity
+                local swingRad = math.rad(swingAngle)
 
-                -- Строим целевой CFrame: позиция текущая, rotation — от targetLookDir
-                local currentPos = hrp.Position
-                local currentCF = hrp.CFrame
-                local targetCF = CFrame.new(currentPos, currentPos + targetLookDir)
-                local newRotation = targetCF - targetCF.Position + currentCF.Position
+                -- Строим CFrame: спиной по движению + болтание
+                local baseCF = CFrame.new(hrp.Position, hrp.Position + baseDir)
+                local swungCF = baseCF * CFrame.Angles(0, swingRad, 0)
 
-                -- Плавный поворот
-                hrp.CFrame = currentCF:Lerp(newRotation, 0.5)
+                -- Оставляем rotation, позицию берём из текущего HRP
+                local newRotation = swungCF - swungCF.Position + hrp.CFrame.Position
+
+                hrp.CFrame = hrp.CFrame:Lerp(newRotation, 0.5)
             end
         end
     end
@@ -42,11 +41,6 @@ else
         local humanoid = char:FindFirstChildOfClass("Humanoid")
         if humanoid and not humanoid.AutoRotate then
             humanoid.AutoRotate = true
-            if Movement.WalkSpeedEnabled then
-                humanoid.WalkSpeed = Movement.WalkSpeedValue
-            else
-                humanoid.WalkSpeed = 16
-            end
         end
     end
 end
