@@ -2097,6 +2097,10 @@ local function createMoonwalkButton()
 btn.MouseButton1Click:Connect(function()
     Moonwalk.Enabled = not Moonwalk.Enabled
 
+    if MoonwalkCheckbox then
+        pcall(function() MoonwalkCheckbox:SetValue(Moonwalk.Enabled) end)
+    end
+
     local char = LocalPlayer.Character
     local hum = char and char:FindFirstChildOfClass("Humanoid")
 
@@ -3464,26 +3468,18 @@ AbilityTab:AddSlider("VaultSpeed", {
 
 AbilityTab:AddDivider()
 
-AbilityTab:AddCheckbox("MoonwalkButton", {
-    Text = "MoonwalkButton",
-    Default = false,
-    Callback = function(v)
-        Moonwalk.ShowButton = v
-
-        if v then
-            createMoonwalkButton()
-        else
-            removeMoonwalkButton()
-        end
-    end
-})
-
 AbilityTab:AddLabel("Moonwalk Keybind"):AddKeyPicker("MoonwalkKey", {
     Default = "V",
     Mode = "Toggle",
     Text = "Moonwalk (pc)",
     Callback = function(state)
         Moonwalk.Enabled = state
+
+        if MoonwalkCheckbox then
+            pcall(function()
+                MoonwalkCheckbox:SetValue(state)
+            end)
+        end
 
         local char = LocalPlayer.Character
         local hum = char and char:FindFirstChildOfClass("Humanoid")
@@ -3497,6 +3493,40 @@ AbilityTab:AddLabel("Moonwalk Keybind"):AddKeyPicker("MoonwalkKey", {
                     hum.WalkSpeed = 16
                 end
             end
+        end
+    end
+})
+
+local MoonwalkCheckbox = AbilityTab:AddCheckbox("MoonwalkToggle", {
+    Text = "Moonwalk",
+    Default = false,
+    Callback = function(v)
+        Moonwalk.Enabled = v
+
+        local char = LocalPlayer.Character
+        local hum = char and char:FindFirstChildOfClass("Humanoid")
+
+        if not v and hum then
+            hum.AutoRotate = true
+            if Movement.WalkSpeedEnabled then
+                hum.WalkSpeed = Movement.WalkSpeedValue
+            else
+                hum.WalkSpeed = 16
+            end
+        end
+    end
+})
+
+AbilityTab:AddCheckbox("MoonwalkButtonToggle", {
+    Text = "MoonwalkButton",
+    Default = false,
+    Callback = function(v)
+        Moonwalk.ShowButton = v
+
+        if v then
+            createMoonwalkButton()
+        else
+            removeMoonwalkButton()
         end
     end
 })
