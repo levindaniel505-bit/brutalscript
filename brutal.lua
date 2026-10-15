@@ -294,7 +294,6 @@ local function findFreeDirection(originPos, baseDir, distance)
     return baseDir
 end
 
--- Реальное движение игрока через Humanoid:Move
 local function moveToPoint(targetPos, killerRoot, lookAt)
     local myRoot = getRoot()
     local hum = getHum()
@@ -310,12 +309,10 @@ local function moveToPoint(targetPos, killerRoot, lookAt)
     local origWalkSpeed = hum.WalkSpeed
     local origAutoRotate = hum.AutoRotate
 
-    -- Динамическая скорость: чем дальше, тем быстрее, но в разумных пределах
     local dodgeSpeed = math.clamp(distance / 0.2, 30, Evade.DodgeSpeed)
     hum.WalkSpeed = dodgeSpeed
     hum.AutoRotate = false
 
-    -- Разворот
     if lookAt and killerRoot then
         local look = killerRoot.Position - startPos
         look = Vector3.new(look.X, 0, look.Z)
@@ -326,7 +323,6 @@ local function moveToPoint(targetPos, killerRoot, lookAt)
         myRoot.CFrame = CFrame.new(startPos, startPos + direction)
     end
 
-    -- Идём НОГАМИ к цели
     local startTick = tick()
     local timeout = Evade.DodgeDuration + 0.1
     while tick() - startTick < timeout do
@@ -350,7 +346,6 @@ local function moveToPoint(targetPos, killerRoot, lookAt)
     end
 end
 
--- Уворот от удара (реальная ходьба)
 local function performAttackDodge(killerRoot, killerChar)
     local myRoot = getRoot()
     local hum = getHum()
@@ -369,7 +364,6 @@ local function performAttackDodge(killerRoot, killerChar)
 
     local right = Vector3.new(-flatToKiller.Z, 0, flatToKiller.X)
 
-    -- Определяем сторону удара
     local sideSign = 0
     if killerChar then
         local hum2 = killerChar:FindFirstChildOfClass("Humanoid")
@@ -450,7 +444,6 @@ local function detectAttackSide(killerRoot)
     return nil
 end
 
--- Выход за спину — реальная ходьба
 local function performEvadeBehind(killerRoot, sideOverride)
     local myRoot = getRoot()
     local hum = getHum()
@@ -475,7 +468,6 @@ local function performEvadeBehind(killerRoot, sideOverride)
     Evade.Active = false
 end
 
--- Дуга (старое поведение, тоже ходьбой)
 local function performEvadeArc(killerRoot)
     local myRoot = getRoot()
     local hum = getHum()
@@ -1246,7 +1238,10 @@ local function createMoonwalkButton()
             stroke.Color = Color3.fromRGB(180, 80, 255)
         else
             stroke.Color = Color3.fromRGB(255,255,255)
-            if hum then hum.WalkSpeed = Movement.WalkSpeedEnabled and Movement.WalkSpeedValue or 16 end
+            if hum then
+                hum.AutoRotate = true
+                hum.WalkSpeed = Movement.WalkSpeedEnabled and Movement.WalkSpeedValue or 16
+            end
         end
     end)
 
@@ -1753,13 +1748,6 @@ local function removeEmoteButton()
     end
 end
 
--- ============== MOONWALK (ИДЕАЛЬНЫЙ) ==============
--- Moonwalk работает так: игрок вводит направление движения, но персонаж
--- разворачивается в ПРОТИВОПОЛОЖНУЮ сторону и идёт спиной вперёд.
--- Никаких рывков, никакого спама CFrame — только изменение rotation.
-local lastMoonwalkCFrame = nil
-local moonwalkAutoRotate = true
-
 local lastESPUpdate = 0
 local lastKillerUpdate = 0
 local lastGodMode = 0
@@ -1862,9 +1850,7 @@ RunService.RenderStepped:Connect(function(dt)
 
     drawCrosshair()
 
-    -- ============== MOONWALK (ПЛАВНЫЙ) ==============
-    -- Логика: игрок смотрит в направлении камеры, но тело развёрнуто назад.
-    -- Персонаж идёт как обычно (Humanoid:Move), но визуально смотрит назад.
+    -- ============== MOONWALK ==============
     if Moonwalk.Enabled and not ParryActive and not isDowned() and not Evade.Active then
         local char = LocalPlayer.Character
         if char and char.Parent then
@@ -1873,29 +1859,21 @@ RunService.RenderStepped:Connect(function(dt)
             local cam = workspace.CurrentCamera
 
             if humanoid and hrp and cam then
-                -- Замедляем скорость
-                if Moonwalk.UseSlow then
+                if Moonwalk.UseSlow and humanoid.WalkSpeed ~= Moonwalk.SlowSpeed then
                     humanoid.WalkSpeed = Moonwalk.SlowSpeed
                 end
 
-                -- Отключаем авто-разворот, чтобы управлять вручную
                 if humanoid.AutoRotate then
                     humanoid.AutoRotate = false
                 end
 
-                -- Определяем, куда игрок хочет двигаться (из MoveDirection)
                 local moveDir = humanoid.MoveDirection
                 local flatMove = Vector3.new(moveDir.X, 0, moveDir.Z)
 
-                -- Целевое направление разворота:
-                -- Если игрок двигается — разворот против движения (луна-ход)
-                -- Если стоит — разворот против взгляда камеры
                 local targetLookDir
-                if flatMove.Magnitude > 0.05 then
-                    -- Двигаемся → смотрим ПРОТИВ движения (спиной вперёд)
+                if flatMove.Magnitude > 0.1 then
                     targetLookDir = -flatMove.Unit
                 else
-                    -- Стоим → смотрим против камеры
                     local camLook = cam.CFrame.LookVector
                     local flatCam = Vector3.new(camLook.X, 0, camLook.Z)
                     if flatCam.Magnitude > 0.01 then
@@ -1905,17 +1883,14 @@ RunService.RenderStepped:Connect(function(dt)
 
                 if targetLookDir then
                     local currentPos = hrp.Position
-                    local targetRotation = CFrame.new(currentPos, currentPos + targetLookDir)
-                    -- Плавный lerp разворота — без рывков
-                    hrp.CFrame = hrp.CFrame:Lerp(
-                        CFrame.new(currentPos) * (targetRotation - targetRotation.Position),
-                        0.3
-                    )
+                    local currentCF = hrp.CFrame
+                    local targetCF = CFrame.new(currentPos, currentPos + targetLookDir)
+                    local newRotation = targetCF - targetCF.Position + currentCF.Position
+                    hrp.CFrame = currentCF:Lerp(newRotation, 0.5)
                 end
             end
         end
     else
-        -- Возвращаем авто-разворот
         local char = LocalPlayer.Character
         if char then
             local humanoid = char:FindFirstChildOfClass("Humanoid")
@@ -2155,21 +2130,21 @@ AbilityTab:AddLabel("Moonwalk Keybind"):AddKeyPicker("MoonwalkKey", {
         if not state then
             local hum = getHum()
             if hum then
-                hum.WalkSpeed = 16
                 hum.AutoRotate = true
+                hum.WalkSpeed = 16
             end
         end
         Notify("Moonwalk", state)
     end
 })
 
-AbilityTab:AddSlider("MoonwalkSpamSpeed", {
-    Text = "Spam Speed", Default = Moonwalk.SpamSpeed, Min = 1, Max = 50, Rounding = 0,
-    Callback = function(Value) Moonwalk.SpamSpeed = Value end
+AbilityTab:AddSlider("MoonwalkSlowSpeed", {
+    Text = "Moonwalk Speed", Default = Moonwalk.SlowSpeed, Min = 5, Max = 32, Rounding = 1,
+    Callback = function(Value) Moonwalk.SlowSpeed = Value end
 })
-AbilityTab:AddSlider("MoonwalkIntensity", {
-    Text = "Intensity", Default = Moonwalk.Intensity, Min = 1, Max = 50, Rounding = 1,
-    Callback = function(Value) Moonwalk.Intensity = Value end
+AbilityTab:AddToggle("MoonwalkUseSlow", {
+    Text = "Slow on Moonwalk", Default = true,
+    Callback = function(v) Moonwalk.UseSlow = v end
 })
 AbilityTab:AddButton({
     Text = "instant escape",
