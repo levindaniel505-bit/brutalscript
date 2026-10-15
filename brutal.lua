@@ -3,7 +3,7 @@ local Library = loadstring(game:HttpGet(repo .. "Library.lua"))()
 local ThemeManager = loadstring(game:HttpGet(repo .. "addons/ThemeManager.lua"))()
 local SaveManager = loadstring(game:HttpGet(repo .. "addons/SaveManager.lua"))()
 
--- ================= ЦВЕТА (анимированный градиент) =================
+-- ================= ПЕРЕЛИВАЮЩИЕСЯ ЦВЕТА =================
 local COLOR_PURPLE = Color3.fromRGB(180, 80, 255)   -- фиолетовый
 local COLOR_PINK   = Color3.fromRGB(255, 100, 200)  -- розовый
 
@@ -35,6 +35,17 @@ local Window = Library:CreateWindow({
     EnableCompacting = IS_MOBILE,
     SidebarCompacted = IS_MOBILE,
 })
+
+-- ============== АНИМИРОВАННЫЙ ГРАДИЕНТ ФИОЛЕТОВЫЙ ↔ РОЗОВЫЙ ==============
+task.spawn(function()
+    while true do
+        local t = (math.sin(tick() * 1.5) + 1) / 2   -- 0..1 циклично
+        local c = COLOR_PURPLE:Lerp(COLOR_PINK, t)
+        Library.Scheme.AccentColor  = c
+        Library.Scheme.OutlineColor = c
+        task.wait(0.05)
+    end
+end)
 
 if IS_MOBILE then
     task.spawn(function()
@@ -76,9 +87,7 @@ if IS_MOBILE then
         task.spawn(function()
             while btn.Parent do
                 local t = (math.sin(tick() * 1.5) + 1) / 2
-                local c = COLOR_PURPLE:Lerp(COLOR_PINK, t)
-                btn.BackgroundColor3 = c
-                stroke.Color = Color3.fromRGB(255, 255, 255)
+                btn.BackgroundColor3 = COLOR_PURPLE:Lerp(COLOR_PINK, t)
                 task.wait(0.05)
             end
         end)
@@ -99,18 +108,6 @@ local Camera = workspace.CurrentCamera
 
 local Watermark = Library:AddDraggableLabel("BRUTALSCRIPT")
 
--- ============== АНИМИРОВАННЫЙ ГРАДИЕНТ ==============
--- Плавно переливает цвет между фиолетовым и розовым
-task.spawn(function()
-    while true do
-        local t = (math.sin(tick() * 1.5) + 1) / 2   -- 0..1 циклично
-        local c = COLOR_PURPLE:Lerp(COLOR_PINK, t)
-        Library.Scheme.AccentColor  = c
-        Library.Scheme.OutlineColor = c
-        task.wait(0.05)
-    end
-end)
-
 -- ============== NOTIFY HELPER ==============
 local function Notify(title, on)
     pcall(function()
@@ -122,7 +119,7 @@ local function Notify(title, on)
     end)
 end
 
--- Стилизация watermark и окна
+-- Стилизация watermark и окна — переливающиеся обводки
 task.spawn(function()
     task.wait(1.5)
     local CoreGui = game:GetService("CoreGui")
@@ -162,7 +159,6 @@ task.spawn(function()
         stroke.ApplyStrokeMode = Enum.ApplyStrokeMode.Border
         stroke.Parent = node
 
-        -- Анимируем обводку watermark
         task.spawn(function()
             while stroke.Parent do
                 local t = (math.sin(tick() * 1.5) + 1) / 2
@@ -195,7 +191,6 @@ task.spawn(function()
                     inner.Transparency = 0.2
                     inner.Parent = obj
 
-                    -- Анимируем внутреннюю обводку
                     task.spawn(function()
                         while inner.Parent do
                             local t = (math.sin(tick() * 1.5) + 1) / 2
