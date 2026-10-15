@@ -25,7 +25,7 @@ local Window = Library:CreateWindow({
     Footer = "BRUTALSCRIPT - Violence District",
     Icon = LOGO_ID,
     IconSize = UDim2.fromOffset(40, 40),
-    CornerRadius = 0,
+    CornerRadius = 12,
     NotifySide = IS_MOBILE and "Left" or "Right",
     ShowCustomCursor = not IS_MOBILE,
     ShowMobileButtons = IS_MOBILE,
@@ -36,14 +36,99 @@ local Window = Library:CreateWindow({
     SidebarCompacted = IS_MOBILE,
 })
 
--- ============== АНИМИРОВАННЫЙ ГРАДИЕНТ ФИОЛЕТОВЫЙ ↔ РОЗОВЫЙ ==============
+-- ============== АНИМИРОВАННЫЙ ГРАДИЕНТ ПО ВСЕМУ МЕНЮ ==============
+-- Работает так: каждый кадр перебираем все GuiObject в Obsidian,
+-- и если цвет элемента совпадает со старым акцентным — меняем на новый.
+-- Так ВСЁ меню переливается: кнопки, слайдеры, чекбоксы, табы, полосы.
 task.spawn(function()
+    local CoreGui = game:GetService("CoreGui")
+    local lastAccent = COLOR_PURPLE
+
+    local function colorClose(a, b, eps)
+        eps = eps or 0.06
+        return math.abs(a.R - b.R) < eps
+           and math.abs(a.G - b.G) < eps
+           and math.abs(a.B - b.B) < eps
+    end
+
+    local function processObject(obj, lastColor, newColor)
+        -- BackgroundColor3 (фон фреймов, кнопок, полос)
+        if obj:IsA("GuiObject") then
+            if colorClose(obj.BackgroundColor3, lastColor) then
+                obj.BackgroundColor3 = newColor
+            end
+        end
+
+        -- TextColor3 (текст в лейблах, кнопках, текстбоксах)
+        if obj:IsA("TextLabel") or obj:IsA("TextButton") or obj:IsA("TextBox") then
+            if colorClose(obj.TextColor3, lastColor) then
+                obj.TextColor3 = newColor
+            end
+            if colorClose(obj.TextStrokeColor3, lastColor) then
+                obj.TextStrokeColor3 = newColor
+            end
+        end
+
+        -- ImageColor3 (иконки, картинки)
+        if obj:IsA("ImageLabel") or obj:IsA("ImageButton") then
+            if colorClose(obj.ImageColor3, lastColor) then
+                obj.ImageColor3 = newColor
+            end
+        end
+
+        -- UIStroke (обводки)
+        if obj:IsA("UIStroke") then
+            if colorClose(obj.Color, lastColor) then
+                obj.Color = newColor
+            end
+        end
+    end
+
     while true do
-        local t = (math.sin(tick() * 1.5) + 1) / 2   -- 0..1 циклично
-        local c = COLOR_PURPLE:Lerp(COLOR_PINK, t)
-        Library.Scheme.AccentColor  = c
-        Library.Scheme.OutlineColor = c
-        task.wait(0.05)
+        local t = (math.sin(tick() * 1.5) + 1) / 2
+        local newAccent = COLOR_PURPLE:Lerp(COLOR_PINK, t)
+
+        -- Обновляем глобальную схему (для новых элементов, которые создаются при кликах)
+        Library.Scheme.AccentColor  = newAccent
+        Library.Scheme.OutlineColor = newAccent
+
+        -- Форсированно перекрашиваем ВСЕ существующие элементы
+        local obsidian = CoreGui:FindFirstChild("Obsidian")
+        if obsidian then
+            for _, obj in ipairs(obsidian:GetDescendants()) do
+                processObject(obj, lastAccent, newAccent)
+            end
+        end
+
+        lastAccent = newAccent
+        task.wait(0.04)
+    end
+end)
+
+-- ============== ЗАКРУГЛЕНИЕ ВСЕХ ЭЛЕМЕНТОВ ==============
+task.spawn(function()
+    task.wait(1.5)
+    local CoreGui = game:GetService("CoreGui")
+    local function roundTree(obj, radius, depth)
+        if depth > 8 then return end
+        if obj:IsA("GuiObject") then
+            if not obj:FindFirstChildOfClass("UICorner") and obj.Name ~= "Cursor" then
+                local c = Instance.new("UICorner")
+                c.CornerRadius = UDim.new(0, radius)
+                c.Parent = obj
+            end
+        end
+        for _, child in ipairs(obj:GetChildren()) do
+            roundTree(child, radius, depth + 1)
+        end
+    end
+
+    for _ = 1, 30 do
+        local obsidian = CoreGui:FindFirstChild("Obsidian")
+        if obsidian then
+            roundTree(obsidian, 8, 0)
+        end
+        task.wait(0.5)
     end
 end)
 
@@ -83,7 +168,6 @@ if IS_MOBILE then
         btn.MouseButton1Click:Connect(function() Library:Toggle() end)
         Library:MakeDraggable(btn, btn, true)
 
-        -- Анимируем цвет кнопки
         task.spawn(function()
             while btn.Parent do
                 local t = (math.sin(tick() * 1.5) + 1) / 2
@@ -119,7 +203,7 @@ local function Notify(title, on)
     end)
 end
 
--- Стилизация watermark и окна — переливающиеся обводки
+-- Стилизация watermark
 task.spawn(function()
     task.wait(1.5)
     local CoreGui = game:GetService("CoreGui")
@@ -163,58 +247,11 @@ task.spawn(function()
             while stroke.Parent do
                 local t = (math.sin(tick() * 1.5) + 1) / 2
                 stroke.Color = COLOR_PURPLE:Lerp(COLOR_PINK, t)
-                task.wait(0.05)
+                task.wait(0.04)
             end
         end)
 
         if node:IsA("Frame") then break end
-    end
-end)
-
-task.spawn(function()
-    task.wait(1.5)
-    local CoreGui = game:GetService("CoreGui")
-    for _, gui in ipairs(CoreGui:GetChildren()) do
-        if gui:IsA("ScreenGui") and gui.Name == "Obsidian" then
-            for _, obj in ipairs(gui:GetDescendants()) do
-                if obj:IsA("Frame") and (obj.Name == "Main" or obj.Name == "Window") then
-                    local outer = Instance.new("UIStroke")
-                    outer.Color = Color3.fromRGB(255, 255, 255)
-                    outer.Thickness = 2
-                    outer.ApplyStrokeMode = Enum.ApplyStrokeMode.Border
-                    outer.Parent = obj
-
-                    local inner = Instance.new("UIStroke")
-                    inner.Color = COLOR_PURPLE
-                    inner.Thickness = 1
-                    inner.ApplyStrokeMode = Enum.ApplyStrokeMode.Border
-                    inner.Transparency = 0.2
-                    inner.Parent = obj
-
-                    task.spawn(function()
-                        while inner.Parent do
-                            local t = (math.sin(tick() * 1.5) + 1) / 2
-                            inner.Color = COLOR_PURPLE:Lerp(COLOR_PINK, t)
-                            task.wait(0.05)
-                        end
-                    end)
-
-                    if not IS_MOBILE then
-                        local bgImage = Instance.new("ImageLabel")
-                        bgImage.Name = "BrutalLogo"
-                        bgImage.Size = UDim2.fromScale(0.55, 0.55)
-                        bgImage.Position = UDim2.fromScale(0.225, 0.225)
-                        bgImage.BackgroundTransparency = 1
-                        bgImage.Image = LOGO_ID
-                        bgImage.ImageTransparency = 0.82
-                        bgImage.ZIndex = 0
-                        bgImage.Parent = obj
-                    end
-                    break
-                end
-            end
-            break
-        end
     end
 end)
 
@@ -286,7 +323,7 @@ local Moonwalk = { Enabled = false, ShowButton = false, SpamSpeed = 30, Intensit
 local MoonwalkConnection = nil
 local MoonwalkButton = nil
 
--- ============== EVADE (движение, не телепорт) ==============
+-- ============== EVADE ==============
 local Evade = {
     Enabled = false,
     Radius = 15,
