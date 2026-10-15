@@ -3,10 +3,10 @@ local Library = loadstring(game:HttpGet(repo .. "Library.lua"))()
 local ThemeManager = loadstring(game:HttpGet(repo .. "addons/ThemeManager.lua"))()
 local SaveManager = loadstring(game:HttpGet(repo .. "addons/SaveManager.lua"))()
 
-Library.Scheme.AccentColor     = Color3.fromRGB(180, 80, 255)
+Library.Scheme.AccentColor     = Color3.fromRGB(60, 160, 255)
 Library.Scheme.BackgroundColor = Color3.fromRGB(12, 12, 12)
 Library.Scheme.MainColor       = Color3.fromRGB(35, 35, 35)
-Library.Scheme.OutlineColor    = Color3.fromRGB(180, 80, 255)
+Library.Scheme.OutlineColor    = Color3.fromRGB(60, 160, 255)
 Library.Scheme.FontColor       = Color3.fromRGB(240, 240, 240)
 
 local LOGO_ID = "rbxassetid://83643298666145"
@@ -74,13 +74,13 @@ local function ShowLoadingScreen()
     barBg.Parent = bg
 
     local barStroke = Instance.new("UIStroke")
-    barStroke.Color = Color3.fromRGB(180, 80, 255)
+    barStroke.Color = Color3.fromRGB(60, 160, 255)
     barStroke.Thickness = 1
     barStroke.Parent = barBg
 
     local barFill = Instance.new("Frame")
     barFill.Size = UDim2.new(0, 0, 1, 0)
-    barFill.BackgroundColor3 = Color3.fromRGB(180, 80, 255)
+    barFill.BackgroundColor3 = Color3.fromRGB(60, 160, 255)
     barFill.BorderSizePixel = 0
     barFill.Parent = barBg
 
@@ -162,20 +162,28 @@ local function ShowKeyPrompt()
     box.ClearTextOnFocus = false
     box.Parent = bg
 
+    local boxCorner = Instance.new("UICorner")
+    boxCorner.CornerRadius = UDim.new(0, 8)
+    boxCorner.Parent = box
+
     local boxStroke = Instance.new("UIStroke")
-    boxStroke.Color = Color3.fromRGB(180, 80, 255)
+    boxStroke.Color = Color3.fromRGB(60, 160, 255)
     boxStroke.Thickness = 1
     boxStroke.Parent = box
 
     local btn = Instance.new("TextButton")
     btn.Size = UDim2.fromOffset(300, 48)
     btn.Position = UDim2.new(0.5, -150, 0.5, 50)
-    btn.BackgroundColor3 = Color3.fromRGB(180, 80, 255)
+    btn.BackgroundColor3 = Color3.fromRGB(60, 160, 255)
     btn.Text = "SUBMIT"
     btn.TextColor3 = Color3.fromRGB(255, 255, 255)
     btn.Font = Enum.Font.GothamBold
     btn.TextSize = 16
     btn.Parent = bg
+
+    local btnCorner = Instance.new("UICorner")
+    btnCorner.CornerRadius = UDim.new(0, 8)
+    btnCorner.Parent = btn
 
     local btnStroke = Instance.new("UIStroke")
     btnStroke.Color = Color3.fromRGB(255, 255, 255)
@@ -274,7 +282,7 @@ local Window = Library:CreateWindow({
     Footer = "BRUTALSCRIPT - Violence District",
     Icon = LOGO_ID,
     IconSize = UDim2.fromOffset(40, 40),
-    CornerRadius = 0,
+    CornerRadius = 12,
     NotifySide = IS_MOBILE and "Left" or "Right",
     ShowCustomCursor = not IS_MOBILE,
     ShowMobileButtons = IS_MOBILE,
@@ -298,7 +306,7 @@ if IS_MOBILE then
         btn.Name = "BrutalOpenButton"
         btn.Size = UDim2.fromOffset(60, 60)
         btn.Position = UDim2.new(0, 15, 0.5, -30)
-        btn.BackgroundColor3 = Color3.fromRGB(180, 80, 255)
+        btn.BackgroundColor3 = Color3.fromRGB(60, 160, 255)
         btn.BackgroundTransparency = 0.15
         btn.Text = ""
         btn.AutoButtonColor = false
@@ -380,7 +388,7 @@ task.spawn(function()
         corner.Parent = node
 
         local stroke = Instance.new("UIStroke")
-        stroke.Color = Color3.fromRGB(180, 80, 255)
+        stroke.Color = Color3.fromRGB(60, 160, 255)
         stroke.Thickness = 1.5
         stroke.ApplyStrokeMode = Enum.ApplyStrokeMode.Border
         stroke.Parent = node
@@ -408,7 +416,7 @@ task.spawn(function()
                     outer.Parent = obj
 
                     local inner = Instance.new("UIStroke")
-                    inner.Color = Color3.fromRGB(180, 80, 255)
+                    inner.Color = Color3.fromRGB(60, 160, 255)
                     inner.Thickness = 1
                     inner.ApplyStrokeMode = Enum.ApplyStrokeMode.Border
                     inner.Transparency = 0.2
@@ -2069,7 +2077,7 @@ local function createMoonwalkButton()
     btn.Parent = gui
 
     local corner = Instance.new("UICorner")
-    corner.CornerRadius = UDim.new(0, 0)
+    corner.CornerRadius = UDim.new(0, 12)
     corner.Parent = btn
 
     local stroke = Instance.new("UIStroke")
@@ -2093,7 +2101,7 @@ btn.MouseButton1Click:Connect(function()
     local hum = char and char:FindFirstChildOfClass("Humanoid")
 
     if Moonwalk.Enabled then
-        stroke.Color = Color3.fromRGB(180, 80, 255)
+        stroke.Color = Color3.fromRGB(60, 160, 255)
     else
         stroke.Color = Color3.fromRGB(255,255,255)
 
@@ -2849,7 +2857,7 @@ local function createEmoteButton()
     btn.Parent = gui
 
     local corner = Instance.new("UICorner")
-    corner.CornerRadius = UDim.new(0, 0)
+    corner.CornerRadius = UDim.new(0, 12)
     corner.Parent = btn
 
     local stroke = Instance.new("UIStroke")
@@ -2880,7 +2888,7 @@ local function createEmoteButton()
     btn.MouseButton1Click:Connect(function()
         playEmote(Emote.Selected)
 
-        stroke.Color = Color3.fromRGB(180, 80, 255)
+        stroke.Color = Color3.fromRGB(60, 160, 255)
         task.delay(0.3, function()
             stroke.Color = Color3.fromRGB(255, 255, 255)
         end)
