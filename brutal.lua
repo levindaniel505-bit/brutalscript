@@ -1,3 +1,117 @@
+-- ================= LOADING SCREEN =================
+local LOGO_ID = "rbxassetid://83643298666145"
+
+local function ShowLoadingScreen()
+    local gui = Instance.new("ScreenGui")
+    gui.Name = "BrutalLoading"
+    gui.ResetOnSpawn = false
+    gui.IgnoreGuiInset = true
+    gui.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
+    gui.Parent = game:GetService("CoreGui")
+
+    local bg = Instance.new("Frame")
+    bg.Size = UDim2.new(1, 0, 1, 0)
+    bg.BackgroundColor3 = Color3.fromRGB(10, 10, 10)
+    bg.BorderSizePixel = 0
+    bg.Parent = gui
+
+    local logo = Instance.new("ImageLabel")
+    logo.Size = UDim2.fromOffset(120, 120)
+    logo.Position = UDim2.new(0.5, -60, 0.5, -160)
+    logo.BackgroundTransparency = 1
+    logo.Image = LOGO_ID
+    logo.Parent = bg
+
+    local title = Instance.new("TextLabel")
+    title.Size = UDim2.new(1, 0, 0, 60)
+    title.Position = UDim2.new(0, 0, 0.5, -60)
+    title.BackgroundTransparency = 1
+    title.Text = "BRUTALSCRIPT"
+    title.TextColor3 = Color3.fromRGB(255, 255, 255)
+    title.Font = Enum.Font.GothamBlack
+    title.TextSize = 42
+    title.TextStrokeTransparency = 0
+    title.TextStrokeColor3 = Color3.fromRGB(120, 20, 20)
+    title.Parent = bg
+
+    local version = Instance.new("TextLabel")
+    version.Size = UDim2.new(1, 0, 0, 24)
+    version.Position = UDim2.new(0, 0, 0.5, -10)
+    version.BackgroundTransparency = 1
+    version.Text = "v1.0"
+    version.TextColor3 = Color3.fromRGB(200, 200, 200)
+    version.Font = Enum.Font.GothamBold
+    version.TextSize = 16
+    version.Parent = bg
+
+    local barBg = Instance.new("Frame")
+    barBg.Size = UDim2.fromOffset(300, 8)
+    barBg.Position = UDim2.new(0.5, -150, 0.5, 40)
+    barBg.BackgroundColor3 = Color3.fromRGB(30, 30, 30)
+    barBg.BorderSizePixel = 0
+    barBg.Parent = bg
+
+    local barStroke = Instance.new("UIStroke")
+    barStroke.Color = Color3.fromRGB(60, 160, 255)
+    barStroke.Thickness = 1
+    barStroke.Parent = barBg
+
+    local barFill = Instance.new("Frame")
+    barFill.Size = UDim2.new(0, 0, 1, 0)
+    barFill.BackgroundColor3 = Color3.fromRGB(60, 160, 255)
+    barFill.BorderSizePixel = 0
+    barFill.Parent = barBg
+
+    local percent = Instance.new("TextLabel")
+    percent.Size = UDim2.new(1, 0, 0, 20)
+    percent.Position = UDim2.new(0, 0, 0.5, 60)
+    percent.BackgroundTransparency = 1
+    percent.Text = "0%"
+    percent.TextColor3 = Color3.fromRGB(200, 200, 200)
+    percent.Font = Enum.Font.Gotham
+    percent.TextSize = 12
+    percent.Parent = bg
+
+    local status = Instance.new("TextLabel")
+    status.Size = UDim2.new(1, 0, 0, 20)
+    status.Position = UDim2.new(0, 0, 0.5, 85)
+    status.BackgroundTransparency = 1
+    status.Text = "Loading..."
+    status.TextColor3 = Color3.fromRGB(150, 150, 150)
+    status.Font = Enum.Font.Gotham
+    status.TextSize = 12
+    status.Parent = bg
+
+    return gui, barFill, percent, status
+end
+
+local loadingGui, barFill, percentLabel, statusLabel = ShowLoadingScreen()
+
+local steps = {
+    { 0.15, "Initializing..." },
+    { 0.35, "Loading libraries..." },
+    { 0.55, "Loading UI..." },
+    { 0.75, "Preparing features..." },
+    { 1.00, "Ready" },
+}
+
+for _, step in ipairs(steps) do
+    local target = step[1]
+    local text = step[2]
+    statusLabel.Text = text
+    local current = barFill.Size.X.Scale
+    while current < target do
+        current = math.min(current + 0.02, target)
+        barFill.Size = UDim2.new(current, 0, 1, 0)
+        percentLabel.Text = math.floor(current * 100) .. "%"
+        task.wait(0.02)
+    end
+end
+
+task.wait(0.5)
+loadingGui:Destroy()
+
+-- ================= MAIN SCRIPT =================
 local repo = "https://raw.githubusercontent.com/deividcomsono/Obsidian/main/"
 local Library = loadstring(game:HttpGet(repo .. "Library.lua"))()
 local ThemeManager = loadstring(game:HttpGet(repo .. "addons/ThemeManager.lua"))()
@@ -9,7 +123,6 @@ Library.Scheme.MainColor       = Color3.fromRGB(35, 35, 35)
 Library.Scheme.OutlineColor    = Color3.fromRGB(60, 160, 255)
 Library.Scheme.FontColor       = Color3.fromRGB(240, 240, 240)
 
-local LOGO_ID = "rbxassetid://83643298666145"
 local IS_MOBILE = game:GetService("UserInputService").TouchEnabled
 
 local WindowSize = IS_MOBILE and UDim2.fromOffset(340, 300) or UDim2.fromOffset(600, 400)
@@ -252,13 +365,13 @@ local Evade = {
     Active = false,
     LastTrigger = 0,
     RequireApproach = true,
-    Mode = "Behind",        -- "Behind" (за спину) или "Arc" (старое поведение)
-    BehindDistance = 3,     -- на сколько студов встать за спиной киллера
-    OffsetSide = 0,         -- смещение вбок от спины (студа)
-    Teleport = true,        -- true = мгновенный CFrame, false = плавный lerp
-    LookAtKiller = true,    -- смотреть на киллера после мува
-    UseRaycast = true,      -- проверять, что точка за спиной не в стене
-    DodgeAttack = true,     -- уклоняться в сторону, противоположную удару
+    Mode = "Behind",
+    BehindDistance = 3,
+    OffsetSide = 0,
+    Teleport = true,
+    LookAtKiller = true,
+    UseRaycast = true,
+    DodgeAttack = true,
 }
 
 local CameraZoom = { UnlimitedZoom = false, MaxDistance = 1000, MinDistance = 0, FOVEnabled = false, FOV = 70, DefaultFOV = workspace.CurrentCamera.FieldOfView }
@@ -1129,7 +1242,7 @@ local function createMoonwalkButton()
     btn.BackgroundTransparency = 0.9
     btn.Parent = gui
     local corner = Instance.new("UICorner")
-    corner.CornerRadius = UDim.new(0, 0)
+    corner.CornerRadius = UDim.new(0, 12)
     corner.Parent = btn
     local stroke = Instance.new("UIStroke")
     stroke.ApplyStrokeMode = Enum.ApplyStrokeMode.Border
@@ -1617,7 +1730,7 @@ local function createEmoteButton()
     btn.BackgroundTransparency = 0.9
     btn.Parent = gui
     local corner = Instance.new("UICorner")
-    corner.CornerRadius = UDim.new(0, 0)
+    corner.CornerRadius = UDim.new(0, 12)
     corner.Parent = btn
     local stroke = Instance.new("UIStroke")
     stroke.ApplyStrokeMode = Enum.ApplyStrokeMode.Border
@@ -2243,7 +2356,6 @@ SettingBox:AddButton("Unload script", function() Library:Unload() end)
 
 ThemeManager:SetLibrary(Library)
 SaveManager:SetLibrary(Library)
-SaveManager:IgnoreThemeSettings()
 SaveManager:IgnoreThemeSettings()
 SaveManager:SetIgnoreIndexes({})
 ThemeManager:SetFolder("BRUTALSCRIPT")
