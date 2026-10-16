@@ -83,28 +83,24 @@ end
 
 local loadingGui, loadingLabel, progressFill, percentLabel = ShowLoadingBar()
 
--- Загрузка идёт до тех пор, пока MenuOpened не станет true.
--- До 99% растёт плавно, потом стоит и ждёт флага.
+-- Загрузка идёт до MenuOpened = true, потом быстро до 100 и fade out
 task.spawn(function()
     local startTime = tick()
-    local softDuration = 4.0   -- за 4 секунды доходит до ~99%
+    local softDuration = 4.0
     local i = 0
 
     while true do
         i += 1
 
-        -- Пульсация надписи
         local pulse = 0.5 + 0.5 * math.sin(i * 0.12)
         loadingLabel.TextTransparency = 1 - pulse
         loadingLabel.TextStrokeTransparency = 0.4 + (1 - pulse) * 0.4
 
         local progress
         if MenuOpened then
-            -- Меню открылось — быстро добиваем до 100
             local current = progressFill.Size.X.Scale
             progress = math.min(current + 0.03, 1)
         else
-            -- Плавно до 0.99, потом стоит
             local raw = math.min((tick() - startTime) / softDuration, 1)
             local eased = raw < 0.5 and 2 * raw * raw or 1 - ((-2 * raw + 2) ^ 2) / 2
             progress = math.min(eased, 0.99)
@@ -120,7 +116,24 @@ task.spawn(function()
         task.wait(0.03)
     end
 
-    task.wait(0.25)
+    -- Плавное исчезание загрузки
+    local fadeDur = 0.4
+    local t0 = tick()
+    while tick() - t0 < fadeDur do
+        local a = (tick() - t0) / fadeDur
+        local trans = a
+
+        loadingLabel.TextTransparency = trans
+        loadingLabel.TextStrokeTransparency = trans
+        percentLabel.TextTransparency = trans
+        bar.BackgroundTransparency = 0.15 + (1 - 0.15) * trans
+        stroke.Transparency = 0.3 + (1 - 0.3) * trans
+        progressBg.BackgroundTransparency = trans
+        progressFill.BackgroundTransparency = trans
+
+        task.wait()
+    end
+
     loadingGui:Destroy()
 end)
 
@@ -188,13 +201,16 @@ task.spawn(function()
     local basePos = mainFrame.Position
     local baseSize = mainFrame.Size
 
+    -- Скрываем меню, ставим прозрачность 1, сжимаем
     mainFrame.Visible = false
     mainFrame.Position = basePos + UDim2.fromOffset(0, 60)
     mainFrame.BackgroundTransparency = 1
     mainFrame.Size = UDim2.new(baseSize.X.Scale, baseSize.X.Offset, baseSize.Y.Scale, baseSize.Y.Offset - 30)
 
-    task.wait(0.15)
+    -- Ждём, пока загрузка дойдёт до 99%
+    task.wait(0.1)
 
+    -- Показываем меню с fade in + выезд снизу
     mainFrame.Visible = true
     local startTick = tick()
     local dur = 0.55
@@ -216,7 +232,7 @@ task.spawn(function()
     mainFrame.BackgroundTransparency = 0
     mainFrame.Size = baseSize
 
-    -- Меню открылось — теперь загрузка может завершиться
+    -- Меню полностью открыто — загрузка может завершаться
     MenuOpened = true
 end)
 
