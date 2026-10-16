@@ -1,7 +1,7 @@
 -- ================= LOADING SCREEN =================
 local LOGO_ID = "rbxassetid://83643298666145"
 
-local function ShowLoadingScreen()
+local function ShowLoadingBar()
     local gui = Instance.new("ScreenGui")
     gui.Name = "BrutalLoading"
     gui.ResetOnSpawn = false
@@ -9,106 +9,65 @@ local function ShowLoadingScreen()
     gui.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
     gui.Parent = game:GetService("CoreGui")
 
-    local bg = Instance.new("Frame")
-    bg.Size = UDim2.new(1, 0, 1, 0)
-    bg.BackgroundColor3 = Color3.fromRGB(10, 10, 10)
-    bg.BorderSizePixel = 0
-    bg.Parent = gui
+    local bar = Instance.new("Frame")
+    bar.Size = UDim2.fromOffset(280, 36)
+    bar.Position = UDim2.new(0.5, -140, 0, 24)
+    bar.BackgroundColor3 = Color3.fromRGB(10, 10, 10)
+    bar.BackgroundTransparency = 0.15
+    bar.BorderSizePixel = 0
+    bar.Parent = gui
 
-    local logo = Instance.new("ImageLabel")
-    logo.Size = UDim2.fromOffset(120, 120)
-    logo.Position = UDim2.new(0.5, -60, 0.5, -160)
-    logo.BackgroundTransparency = 1
-    logo.Image = LOGO_ID
-    logo.Parent = bg
+    local corner = Instance.new("UICorner")
+    corner.CornerRadius = UDim.new(0, 8)
+    corner.Parent = bar
 
-    local title = Instance.new("TextLabel")
-    title.Size = UDim2.new(1, 0, 0, 60)
-    title.Position = UDim2.new(0, 0, 0.5, -60)
-    title.BackgroundTransparency = 1
-    title.Text = "BRUTALSCRIPT"
-    title.TextColor3 = Color3.fromRGB(255, 255, 255)
-    title.Font = Enum.Font.GothamBlack
-    title.TextSize = 42
-    title.TextStrokeTransparency = 0
-    title.TextStrokeColor3 = Color3.fromRGB(120, 20, 20)
-    title.Parent = bg
+    local stroke = Instance.new("UIStroke")
+    stroke.Color = Color3.fromRGB(255, 255, 255)
+    stroke.Thickness = 1
+    stroke.Transparency = 0.3
+    stroke.Parent = bar
 
-    local version = Instance.new("TextLabel")
-    version.Size = UDim2.new(1, 0, 0, 24)
-    version.Position = UDim2.new(0, 0, 0.5, -10)
-    version.BackgroundTransparency = 1
-    version.Text = "v1.0"
-    version.TextColor3 = Color3.fromRGB(200, 200, 200)
-    version.Font = Enum.Font.GothamBold
-    version.TextSize = 16
-    version.Parent = bg
+    local label = Instance.new("TextLabel")
+    label.Size = UDim2.new(1, 0, 1, 0)
+    label.BackgroundTransparency = 1
+    label.Text = "BRUTALSCRIPT"
+    label.TextColor3 = Color3.fromRGB(255, 255, 255)
+    label.Font = Enum.Font.GothamBold
+    label.TextSize = 16
+    label.TextStrokeTransparency = 0.4
+    label.TextStrokeColor3 = Color3.fromRGB(0, 0, 0)
+    label.Parent = bar
 
-    local barBg = Instance.new("Frame")
-    barBg.Size = UDim2.fromOffset(300, 8)
-    barBg.Position = UDim2.new(0.5, -150, 0.5, 40)
-    barBg.BackgroundColor3 = Color3.fromRGB(30, 30, 30)
-    barBg.BorderSizePixel = 0
-    barBg.Parent = bg
+    local dots = Instance.new("TextLabel")
+    dots.Size = UDim2.new(0, 60, 1, 0)
+    dots.Position = UDim2.new(1, 0, 0, 0)
+    dots.BackgroundTransparency = 1
+    dots.Text = ""
+    dots.TextColor3 = Color3.fromRGB(200, 200, 200)
+    dots.Font = Enum.Font.GothamBold
+    dots.TextSize = 16
+    dots.Parent = bar
 
-    local barStroke = Instance.new("UIStroke")
-    barStroke.Color = Color3.fromRGB(60, 160, 255)
-    barStroke.Thickness = 1
-    barStroke.Parent = barBg
-
-    local barFill = Instance.new("Frame")
-    barFill.Size = UDim2.new(0, 0, 1, 0)
-    barFill.BackgroundColor3 = Color3.fromRGB(60, 160, 255)
-    barFill.BorderSizePixel = 0
-    barFill.Parent = barBg
-
-    local percent = Instance.new("TextLabel")
-    percent.Size = UDim2.new(1, 0, 0, 20)
-    percent.Position = UDim2.new(0, 0, 0.5, 60)
-    percent.BackgroundTransparency = 1
-    percent.Text = "0%"
-    percent.TextColor3 = Color3.fromRGB(200, 200, 200)
-    percent.Font = Enum.Font.Gotham
-    percent.TextSize = 12
-    percent.Parent = bg
-
-    local status = Instance.new("TextLabel")
-    status.Size = UDim2.new(1, 0, 0, 20)
-    status.Position = UDim2.new(0, 0, 0.5, 85)
-    status.BackgroundTransparency = 1
-    status.Text = "Loading..."
-    status.TextColor3 = Color3.fromRGB(150, 150, 150)
-    status.Font = Enum.Font.Gotham
-    status.TextSize = 12
-    status.Parent = bg
-
-    return gui, barFill, percent, status
+    return gui, label, dots
 end
 
-local loadingGui, barFill, percentLabel, statusLabel = ShowLoadingScreen()
+local loadingGui, loadingLabel, loadingDots = ShowLoadingBar()
 
-local steps = {
-    { 0.15, "Initializing..." },
-    { 0.35, "Loading libraries..." },
-    { 0.55, "Loading UI..." },
-    { 0.75, "Preparing features..." },
-    { 1.00, "Ready" },
-}
+-- Анимация точек и небольшая пульсация текста ~5.5 сек
+local dotStates = { ".", "..", "...", "" }
+local startTime = tick()
+local duration = 5.5
+local i = 0
 
-for _, step in ipairs(steps) do
-    local target = step[1]
-    local text = step[2]
-    statusLabel.Text = text
-    local current = barFill.Size.X.Scale
-    while current < target do
-        current = math.min(current + 0.02, target)
-        barFill.Size = UDim2.new(current, 0, 1, 0)
-        percentLabel.Text = math.floor(current * 100) .. "%"
-        task.wait(0.02)
-    end
+while tick() - startTime < duration do
+    i = i + 1
+    loadingDots.Text = dotStates[(i % #dotStates) + 1]
+    local pulse = 0.5 + 0.5 * math.sin(i * 0.15)
+    loadingLabel.TextTransparency = 1 - pulse
+    loadingLabel.TextStrokeTransparency = 0.4 + (1 - pulse) * 0.4
+    task.wait(0.12)
 end
 
-task.wait(0.5)
 loadingGui:Destroy()
 
 -- ================= MAIN SCRIPT =================
@@ -143,6 +102,85 @@ local Window = Library:CreateWindow({
     SidebarCompacted = IS_MOBILE,
 })
 
+-- ============== MENU OPEN/CLOSE ANIMATION ==============
+task.spawn(function()
+    task.wait(0.4)
+
+    local CoreGui = game:GetService("CoreGui")
+    local obsidian
+    for _, gui in ipairs(CoreGui:GetChildren()) do
+        if gui:IsA("ScreenGui") and gui.Name == "Obsidian" then
+            obsidian = gui
+            break
+        end
+    end
+    if not obsidian then return end
+
+    local mainFrame
+    for _, obj in ipairs(obsidian:GetDescendants()) do
+        if obj:IsA("Frame") and (obj.Name == "Main" or obj.Name == "Window") then
+            mainFrame = obj
+            break
+        end
+    end
+    if not mainFrame then return end
+
+    local basePos = mainFrame.Position
+    local baseSize = mainFrame.Size
+    local isOpen = true
+
+    -- Анимация появления (выезд снизу + fade)
+    mainFrame.Position = basePos + UDim2.fromOffset(0, 40)
+    mainFrame.BackgroundTransparency = 1
+    local startTick = tick()
+    while tick() - startTick < 0.45 do
+        local alpha = (tick() - startTick) / 0.45
+        local eased = 1 - (1 - alpha)^3
+        mainFrame.Position = basePos + UDim2.fromOffset(0, 40 * (1 - eased))
+        mainFrame.BackgroundTransparency = 1 - eased
+        task.wait()
+    end
+    mainFrame.Position = basePos
+    mainFrame.BackgroundTransparency = 0
+
+    -- Следим за переключением меню (RightShift) и анимируем
+    local UserInputService = game:GetService("UserInputService")
+    local animating = false
+
+    local function animateMenu(open)
+        if animating then return end
+        animating = true
+
+        local fromPos = mainFrame.Position
+        local fromTrans = mainFrame.BackgroundTransparency
+        local toPos = open and basePos or (basePos + UDim2.fromOffset(0, 40))
+        local toTrans = open and 0 or 1
+
+        local dur = 0.28
+        local t0 = tick()
+        while tick() - t0 < dur do
+            local a = (tick() - t0) / dur
+            local eased = 1 - (1 - a)^3
+            mainFrame.Position = fromPos:Lerp(toPos, eased)
+            mainFrame.BackgroundTransparency = fromTrans + (toTrans - fromTrans) * eased
+            task.wait()
+        end
+
+        mainFrame.Position = toPos
+        mainFrame.BackgroundTransparency = toTrans
+        animating = false
+    end
+
+    UserInputService.InputBegan:Connect(function(input, gp)
+        if gp then return end
+        if input.KeyCode == Enum.KeyCode.RightShift then
+            isOpen = not isOpen
+            animateMenu(isOpen)
+        end
+    end)
+end)
+
+-- ============== MOBILE BUTTON ==============
 if IS_MOBILE then
     task.spawn(function()
         task.wait(2)
