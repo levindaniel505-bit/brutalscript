@@ -870,7 +870,7 @@ local function doParry()
     if now - lastParry < PARRY_DEBOUNCE then return end
     lastParry = now
     ParryActive = true
-    if Moonwalk.Enabled then Moonwalk.Enabled = false end
+    -- Moonwalk больше НЕ выключается при парри
     pressParryButton()
     task.delay(0.3, function() ParryActive = false end)
 end
@@ -1839,48 +1839,6 @@ AbilityTab:AddSlider("VaultSpeed", { Text = "Animation Speed", Default = 1.2, Mi
 
 AbilityTab:AddDivider()
 
--- ========== EVADE (УПРОЩЁННЫЙ) ==========
-AbilityTab:AddLabel("Evade Keybind"):AddKeyPicker("EvadeBind", {
-    Default = "Z",
-    Mode = "Toggle",
-    Text = "Evade (toggle)",
-    Callback = function(state)
-        Evade.Enabled = state
-        Notify("Evade", state)
-    end
-})
-
-AbilityTab:AddCheckbox("EvadeEnable", {
-    Text = "Evade",
-    Default = false,
-    Callback = function(v)
-        Evade.Enabled = v
-        Notify("Evade", v)
-    end
-})
-
-AbilityTab:AddDropdown("EvadeSide", {
-    Text = "Dodge Side",
-    Values = { "Auto", "Left", "Right" },
-    Default = 1,
-    Multi = false,
-    Callback = function(v) Evade.Side = v end
-})
-
-AbilityTab:AddSlider("EvadeDistance", {
-    Text = "Dodge Distance",
-    Default = 12, Min = 5, Max = 25, Rounding = 0,
-    Callback = function(v) Evade.Distance = v end
-})
-
-AbilityTab:AddSlider("EvadeSpeed", {
-    Text = "Dodge Speed",
-    Default = 55, Min = 25, Max = 100, Rounding = 0,
-    Callback = function(v) Evade.Speed = v end
-})
-
-AbilityTab:AddDivider()
-
 -- MOONWALK
 AbilityTab:AddLabel("Moonwalk Keybind"):AddKeyPicker("MoonwalkKey", {
     Default = "V",
@@ -1929,6 +1887,66 @@ AbilityTab:AddCheckbox("MoonwalkButtonToggle", {
 
 AbilityTab:AddSlider("MoonwalkSpamSpeed", { Text = "Spam Speed", Default = Moonwalk.SpamSpeed, Min = 1, Max = 50, Rounding = 0, Callback = function(Value) Moonwalk.SpamSpeed = Value end })
 AbilityTab:AddSlider("MoonwalkIntensity", { Text = "Intensity", Default = Moonwalk.Intensity, Min = 1, Max = 50, Rounding = 1, Callback = function(Value) Moonwalk.Intensity = Value end })
+
+-- ========== EVADE ==========
+AbilityTab:AddLabel("Evade Keybind"):AddKeyPicker("EvadeBind", {
+    Default = "Z",
+    Mode = "Toggle",
+    Text = "Evade (toggle)",
+    Callback = function(state)
+        Evade.Enabled = state
+        Notify("Evade", state)
+    end
+})
+
+AbilityTab:AddCheckbox("EvadeEnable", {
+    Text = "Evade",
+    Default = false,
+    Callback = function(v)
+        Evade.Enabled = v
+        Notify("Evade", v)
+    end
+})
+
+AbilityTab:AddDropdown("EvadeSide", {
+    Text = "Dodge Side",
+    Values = { "Auto", "Left", "Right" },
+    Default = 1,
+    Multi = false,
+    Callback = function(v) Evade.Side = v end
+})
+
+AbilityTab:AddSlider("EvadeDistance", {
+    Text = "Dodge Distance",
+    Default = 12, Min = 5, Max = 25, Rounding = 0,
+    Callback = function(v) Evade.Distance = v end
+})
+
+AbilityTab:AddSlider("EvadeSpeed", {
+    Text = "Dodge Speed",
+    Default = 55, Min = 25, Max = 100, Rounding = 0,
+    Callback = function(v) Evade.Speed = v end
+})
+
+AbilityTab:AddSlider("EvadeCooldown", {
+    Text = "Cooldown",
+    Default = 0.3, Min = 0.05, Max = 2, Rounding = 2,
+    Callback = function(v) Evade.Cooldown = v end
+})
+
+AbilityTab:AddSlider("EvadeRange", {
+    Text = "Trigger Range",
+    Default = 12, Min = 5, Max = 40, Rounding = 0,
+    Callback = function(v) Evade.Range = v end
+})
+
+AbilityTab:AddSlider("EvadeDuration", {
+    Text = "Dodge Duration",
+    Default = 0.22, Min = 0.05, Max = 1, Rounding = 2,
+    Callback = function(v) Evade.Duration = v end
+})
+
+AbilityTab:AddDivider()
 
 AbilityTab:AddButton({ Text = "instant escape", Func = function() teleportToFinishLine() end })
 
