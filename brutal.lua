@@ -9,13 +9,19 @@ local function ShowLoadingBar()
     gui.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
     gui.Parent = game:GetService("CoreGui")
 
+    local container = Instance.new("Frame")
+    container.Size = UDim2.fromOffset(320, 80)
+    container.Position = UDim2.new(0.5, -160, 0.5, -40)
+    container.BackgroundTransparency = 1
+    container.Parent = gui
+
     local bar = Instance.new("Frame")
     bar.Size = UDim2.fromOffset(280, 36)
-    bar.Position = UDim2.new(0.5, -140, 0, 24)
+    bar.Position = UDim2.new(0.5, -140, 0, 0)
     bar.BackgroundColor3 = Color3.fromRGB(10, 10, 10)
     bar.BackgroundTransparency = 0.15
     bar.BorderSizePixel = 0
-    bar.Parent = gui
+    bar.Parent = container
 
     local corner = Instance.new("UICorner")
     corner.CornerRadius = UDim.new(0, 8)
@@ -38,36 +44,55 @@ local function ShowLoadingBar()
     label.TextStrokeColor3 = Color3.fromRGB(0, 0, 0)
     label.Parent = bar
 
-    local dots = Instance.new("TextLabel")
-    dots.Size = UDim2.new(0, 60, 1, 0)
-    dots.Position = UDim2.new(1, 0, 0, 0)
-    dots.BackgroundTransparency = 1
-    dots.Text = ""
-    dots.TextColor3 = Color3.fromRGB(200, 200, 200)
-    dots.Font = Enum.Font.GothamBold
-    dots.TextSize = 16
-    dots.Parent = bar
+    local progressBg = Instance.new("Frame")
+    progressBg.Size = UDim2.fromOffset(280, 4)
+    progressBg.Position = UDim2.new(0.5, -140, 0, 44)
+    progressBg.BackgroundColor3 = Color3.fromRGB(40, 40, 40)
+    progressBg.BorderSizePixel = 0
+    progressBg.Parent = container
 
-    return gui, label, dots
+    local progressCorner = Instance.new("UICorner")
+    progressCorner.CornerRadius = UDim.new(1, 0)
+    progressCorner.Parent = progressBg
+
+    local progressFill = Instance.new("Frame")
+    progressFill.Size = UDim2.new(0, 0, 1, 0)
+    progressFill.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
+    progressFill.BorderSizePixel = 0
+    progressFill.Parent = progressBg
+
+    local progressFillCorner = Instance.new("UICorner")
+    progressFillCorner.CornerRadius = UDim.new(1, 0)
+    progressFillCorner.Parent = progressFill
+
+    return gui, label, progressFill
 end
 
-local loadingGui, loadingLabel, loadingDots = ShowLoadingBar()
+local loadingGui, loadingLabel, progressFill = ShowLoadingBar()
 
--- Анимация точек и небольшая пульсация текста ~5.5 сек
-local dotStates = { ".", "..", "...", "" }
+-- Анимация: пульсация надписи + медленное заполнение прогресс-бара (~6.5 сек)
 local startTime = tick()
-local duration = 5.5
+local duration = 6.5
 local i = 0
 
 while tick() - startTime < duration do
     i = i + 1
-    loadingDots.Text = dotStates[(i % #dotStates) + 1]
-    local pulse = 0.5 + 0.5 * math.sin(i * 0.15)
+
+    -- Пульсация надписи
+    local pulse = 0.5 + 0.5 * math.sin(i * 0.12)
     loadingLabel.TextTransparency = 1 - pulse
     loadingLabel.TextStrokeTransparency = 0.4 + (1 - pulse) * 0.4
-    task.wait(0.12)
+
+    -- Плавное заполнение с небольшим "статтером" для реалистичности
+    local rawProgress = (tick() - startTime) / duration
+    local eased = rawProgress < 0.5 and 2 * rawProgress * rawProgress or 1 - ((-2 * rawProgress + 2) ^ 2) / 2
+    progressFill.Size = UDim2.new(eased, 0, 1, 0)
+
+    task.wait(0.05)
 end
 
+progressFill.Size = UDim2.new(1, 0, 1, 0)
+task.wait(0.3)
 loadingGui:Destroy()
 
 -- ================= MAIN SCRIPT =================
@@ -86,6 +111,7 @@ local IS_MOBILE = game:GetService("UserInputService").TouchEnabled
 
 local WindowSize = IS_MOBILE and UDim2.fromOffset(340, 300) or UDim2.fromOffset(600, 400)
 
+-- Создаём окно ПРИВАЛИДНО, но сразу скроем — потом покажем с анимацией
 local Window = Library:CreateWindow({
     Title = "BRUTALSCRIPT",
     Footer = "BRUTALSCRIPT - Violence District",
@@ -102,9 +128,9 @@ local Window = Library:CreateWindow({
     SidebarCompacted = IS_MOBILE,
 })
 
--- ============== MENU OPEN/CLOSE ANIMATION ==============
+-- ============== MENU OPEN ANIMATION ==============
 task.spawn(function()
-    task.wait(0.4)
+    task.wait(0.3)
 
     local CoreGui = game:GetService("CoreGui")
     local obsidian
@@ -127,57 +153,36 @@ task.spawn(function()
 
     local basePos = mainFrame.Position
     local baseSize = mainFrame.Size
-    local isOpen = true
 
-    -- Анимация появления (выезд снизу + fade)
-    mainFrame.Position = basePos + UDim2.fromOffset(0, 40)
+    -- Скрываем окно сразу
+    mainFrame.Visible = false
+    mainFrame.Position = basePos + UDim2.fromOffset(0, 60)
     mainFrame.BackgroundTransparency = 1
+    mainFrame.Size = UDim2.new(baseSize.X.Scale, baseSize.X.Offset, baseSize.Y.Scale, baseSize.Y.Offset - 30)
+
+    task.wait(0.15)
+
+    -- Показываем с анимацией: выезд снизу + fade + лёгкий "рост" по высоте
+    mainFrame.Visible = true
     local startTick = tick()
-    while tick() - startTick < 0.45 do
-        local alpha = (tick() - startTick) / 0.45
+    local dur = 0.55
+
+    while tick() - startTick < dur do
+        local alpha = (tick() - startTick) / dur
         local eased = 1 - (1 - alpha)^3
-        mainFrame.Position = basePos + UDim2.fromOffset(0, 40 * (1 - eased))
+
+        mainFrame.Position = basePos + UDim2.fromOffset(0, 60 * (1 - eased))
         mainFrame.BackgroundTransparency = 1 - eased
+        mainFrame.Size = UDim2.new(
+            baseSize.X.Scale, baseSize.X.Offset,
+            baseSize.Y.Scale, baseSize.Y.Offset - 30 * (1 - eased)
+        )
         task.wait()
     end
+
     mainFrame.Position = basePos
     mainFrame.BackgroundTransparency = 0
-
-    -- Следим за переключением меню (RightShift) и анимируем
-    local UserInputService = game:GetService("UserInputService")
-    local animating = false
-
-    local function animateMenu(open)
-        if animating then return end
-        animating = true
-
-        local fromPos = mainFrame.Position
-        local fromTrans = mainFrame.BackgroundTransparency
-        local toPos = open and basePos or (basePos + UDim2.fromOffset(0, 40))
-        local toTrans = open and 0 or 1
-
-        local dur = 0.28
-        local t0 = tick()
-        while tick() - t0 < dur do
-            local a = (tick() - t0) / dur
-            local eased = 1 - (1 - a)^3
-            mainFrame.Position = fromPos:Lerp(toPos, eased)
-            mainFrame.BackgroundTransparency = fromTrans + (toTrans - fromTrans) * eased
-            task.wait()
-        end
-
-        mainFrame.Position = toPos
-        mainFrame.BackgroundTransparency = toTrans
-        animating = false
-    end
-
-    UserInputService.InputBegan:Connect(function(input, gp)
-        if gp then return end
-        if input.KeyCode == Enum.KeyCode.RightShift then
-            isOpen = not isOpen
-            animateMenu(isOpen)
-        end
-    end)
+    mainFrame.Size = baseSize
 end)
 
 -- ============== MOBILE BUTTON ==============
