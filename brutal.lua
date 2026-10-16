@@ -240,20 +240,23 @@ local Moonwalk = { Enabled = false, ShowButton = false, SpamSpeed = 30, Intensit
 local MoonwalkButton = nil
 local MoonwalkCheckbox = nil
 
--- ============== EVADE (ARC) ==============
+-- ============== EVADE (ARC + POSITION TRIGGER) ==============
 local Evade = {
     Enabled = false,
     Side = "Auto",
-    ArcRadius = 12,       -- радиус дуги вокруг киллера
-    ArcAngle = 120,       -- на сколько градусов обходим
-    ArcSteps = 18,        -- плавность (кол-во сегментов)
+    ArcRadius = 12,
+    ArcAngle = 120,
+    ArcSteps = 18,
     Speed = 55,
     Duration = 0.25,
-    Cooldown = 0.3,
-    Range = 12,
+    Cooldown = 0.35,
+    Range = 14,
+    ApproachDot = 0.4,       -- насколько "прямо на игрока" должен идти киллер (0..1)
+    ClosingSpeed = 3,        -- минимальная скорость сближения (studs/sec)
     Active = false,
     LastTime = 0,
     LastSide = 1,
+    LastPos = nil,
 }
 
 local KillerAnims = {
@@ -299,6 +302,23 @@ local function isDowned()
         or char:GetAttribute("Knocked") == true
 end
 
+local function getNearestKillerChar()
+    local myRoot = getRoot()
+    if not myRoot then return nil end
+    local best, bestDist = nil, math.huge
+    for _, p in ipairs(Players:GetPlayers()) do
+        if p ~= LocalPlayer and p.Character and p.Team and p.Team.Name == "Killer" then
+            local hum = p.Character:FindFirstChildOfClass("Humanoid")
+            local hrp = p.Character:FindFirstChild("HumanoidRootPart")
+            if hum and hrp and hum.Health > 0 then
+                local d = (hrp.Position - myRoot.Position).Magnitude
+                if d < bestDist then bestDist = d best = p.Character end
+            end
+        end
+    end
+    return best, bestDist
+end
+
 -- ============== EVADE ARC LOGIC ==============
 local function performDodge(killerRoot)
     local myRoot = getRoot()
@@ -307,18 +327,14 @@ local function performDodge(killerRoot)
 
     Evade.Active = true
 
-    -- Направление от киллера к игроку (плоское)
     local toMe = myRoot.Position - killerRoot.Position
     local flatToMe = Vector3.new(toMe.X, 0, toMe.Z)
     if flatToMe.Magnitude < 0.01 then flatToMe = Vector3.new(0, 0, 1) end
     flatToMe = flatToMe.Unit
 
-    -- Текущий угол игрока относительно киллера
     local startAngle = math.atan2(flatToMe.Z, flatToMe.X)
-    -- Угол обхода в радианах
     local sweep = math.rad(Evade.ArcAngle)
 
-    -- Выбор стороны
     local sideSign
     if Evade.Side == "Auto" then
         sideSign = -Evade.LastSide
@@ -329,7 +345,6 @@ local function performDodge(killerRoot)
     end
     Evade.LastSide = sideSign
 
-    -- Радиус дуги: не меньше расстояния до киллера, но хотя бы ArcRadius
     local currentDist = flatToMe.Magnitude
     local radius = math.max(currentDist, Evade.ArcRadius)
 
@@ -339,7 +354,6 @@ local function performDodge(killerRoot)
     hum.WalkSpeed = Evade.Speed
     hum.AutoRotate = false
 
-    -- Поворот лицом к киллеру на время рывка
     local look = killerRoot.Position - myRoot.Position
     look = Vector3.new(look.X, 0, look.Z)
     if look.Magnitude > 0.01 then
@@ -364,7 +378,6 @@ local function performDodge(killerRoot)
             hum:Move(dir.Unit)
         end
 
-        -- Смотрим на киллера во время дуги
         local lookNow = killerRoot.Position - myRoot.Position
         lookNow = Vector3.new(lookNow.X, 0, lookNow.Z)
         if lookNow.Magnitude > 0.01 then
@@ -389,6 +402,56 @@ local function performDodge(killerRoot)
     Evade.Active = false
 end
 
+-- Основной watcher: триггер по позиции/скорости киллера
+task.spawn(function()
+    while task.wait(0.08) do
+        if not Evade.Enabled or Evade.Active then continue end
+        if isDowned() then continue end
+
+        local myRoot = getRoot()
+        local hum = getHum()
+        if not myRoot or not hum then continue end
+
+        local now = tick()
+        if now - Evade.LastTime < Evade.Cooldown then continue end
+
+        local killerChar, dist = getNearestKillerChar()
+        if not killerChar or not dist or dist > Evade.Range then continue end
+
+        local killerRoot = killerChar:FindFirstChild("HumanoidRootPart")
+        if not killerRoot then continue end
+
+        -- Вектор от киллера к игроку (плоский)
+        local toMe = myRoot.Position - killerRoot.Position
+        local flatToMe = Vector3.new(toMe.X, 0, toMe.Z)
+        if flatToMe.Magnitude < 0.01 then continue end
+        flatToMe = flatToMe.Unit
+
+        -- Куда смотрит киллер (плоско)
+        local look = killerRoot.CFrame.LookVector
+        local flatLook = Vector3.new(look.X, 0, look.Z)
+        if flatLook.Magnitude < 0.01 then continue end
+        flatLook = flatLook.Unit
+
+        -- Насколько прямо киллер смотрит на игрока
+        local facingDot = flatLook:Dot(flatToMe)
+
+        -- Скорость сближения
+        local killerVel = killerRoot.AssemblyLinearVelocity
+        local flatVel = Vector3.new(killerVel.X, 0, killerVel.Z)
+        local closingSpeed = flatVel:Dot(flatToMe)
+
+        -- Триггер: киллер смотрит на игрока И сближается
+        if facingDot >= Evade.ApproachDot and closingSpeed >= Evade.ClosingSpeed then
+            Evade.LastTime = now
+            task.spawn(function()
+                performDodge(killerRoot)
+            end)
+        end
+    end
+end)
+
+-- Дополнительный триггер по анимации (если клиент реплицирует)
 local hookedKillers = {}
 
 local function hookKillerForEvade(char)
@@ -880,7 +943,6 @@ local function doParry()
     if now - lastParry < PARRY_DEBOUNCE then return end
     lastParry = now
     ParryActive = true
-    -- Moonwalk больше НЕ выключается при парри
     pressParryButton()
     task.delay(0.3, function() ParryActive = false end)
 end
@@ -1958,14 +2020,26 @@ AbilityTab:AddSlider("EvadeDuration", {
 
 AbilityTab:AddSlider("EvadeCooldown", {
     Text = "Cooldown",
-    Default = 0.3, Min = 0.05, Max = 2, Rounding = 2,
+    Default = 0.35, Min = 0.05, Max = 2, Rounding = 2,
     Callback = function(v) Evade.Cooldown = v end
 })
 
 AbilityTab:AddSlider("EvadeRange", {
     Text = "Trigger Range",
-    Default = 12, Min = 5, Max = 40, Rounding = 0,
+    Default = 14, Min = 5, Max = 40, Rounding = 0,
     Callback = function(v) Evade.Range = v end
+})
+
+AbilityTab:AddSlider("EvadeApproachDot", {
+    Text = "Approach Dot (0..1)",
+    Default = 0.4, Min = -1, Max = 1, Rounding = 2,
+    Callback = function(v) Evade.ApproachDot = v end
+})
+
+AbilityTab:AddSlider("EvadeClosingSpeed", {
+    Text = "Closing Speed (studs/s)",
+    Default = 3, Min = 0, Max = 30, Rounding = 0,
+    Callback = function(v) Evade.ClosingSpeed = v end
 })
 
 AbilityTab:AddDivider()
