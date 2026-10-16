@@ -1,6 +1,8 @@
 -- ================= LOADING SCREEN =================
 local LOGO_ID = "rbxassetid://83643298666145"
 
+local MenuOpened = false
+
 local function ShowLoadingBar()
     local gui = Instance.new("ScreenGui")
     gui.Name = "BrutalLoading"
@@ -10,8 +12,8 @@ local function ShowLoadingBar()
     gui.Parent = game:GetService("CoreGui")
 
     local container = Instance.new("Frame")
-    container.Size = UDim2.fromOffset(320, 80)
-    container.Position = UDim2.new(0.5, -160, 0.5, -40)
+    container.Size = UDim2.fromOffset(320, 100)
+    container.Position = UDim2.new(0.5, -160, 0.5, -50)
     container.BackgroundTransparency = 1
     container.Parent = gui
 
@@ -65,35 +67,62 @@ local function ShowLoadingBar()
     progressFillCorner.CornerRadius = UDim.new(1, 0)
     progressFillCorner.Parent = progressFill
 
-    return gui, label, progressFill
+    local percentLabel = Instance.new("TextLabel")
+    percentLabel.Size = UDim2.new(1, 0, 0, 18)
+    percentLabel.Position = UDim2.new(0, 0, 0, 54)
+    percentLabel.BackgroundTransparency = 1
+    percentLabel.Text = "0%"
+    percentLabel.TextColor3 = Color3.fromRGB(220, 220, 220)
+    percentLabel.Font = Enum.Font.GothamBold
+    percentLabel.TextSize = 13
+    percentLabel.TextStrokeTransparency = 0.5
+    percentLabel.Parent = container
+
+    return gui, label, progressFill, percentLabel
 end
 
-local loadingGui, loadingLabel, progressFill = ShowLoadingBar()
+local loadingGui, loadingLabel, progressFill, percentLabel = ShowLoadingBar()
 
--- Анимация: пульсация надписи + медленное заполнение прогресс-бара (~6.5 сек)
-local startTime = tick()
-local duration = 6.5
-local i = 0
+-- Загрузка идёт до тех пор, пока MenuOpened не станет true.
+-- До 99% растёт плавно, потом стоит и ждёт флага.
+task.spawn(function()
+    local startTime = tick()
+    local softDuration = 4.0   -- за 4 секунды доходит до ~99%
+    local i = 0
 
-while tick() - startTime < duration do
-    i = i + 1
+    while true do
+        i += 1
 
-    -- Пульсация надписи
-    local pulse = 0.5 + 0.5 * math.sin(i * 0.12)
-    loadingLabel.TextTransparency = 1 - pulse
-    loadingLabel.TextStrokeTransparency = 0.4 + (1 - pulse) * 0.4
+        -- Пульсация надписи
+        local pulse = 0.5 + 0.5 * math.sin(i * 0.12)
+        loadingLabel.TextTransparency = 1 - pulse
+        loadingLabel.TextStrokeTransparency = 0.4 + (1 - pulse) * 0.4
 
-    -- Плавное заполнение с небольшим "статтером" для реалистичности
-    local rawProgress = (tick() - startTime) / duration
-    local eased = rawProgress < 0.5 and 2 * rawProgress * rawProgress or 1 - ((-2 * rawProgress + 2) ^ 2) / 2
-    progressFill.Size = UDim2.new(eased, 0, 1, 0)
+        local progress
+        if MenuOpened then
+            -- Меню открылось — быстро добиваем до 100
+            local current = progressFill.Size.X.Scale
+            progress = math.min(current + 0.03, 1)
+        else
+            -- Плавно до 0.99, потом стоит
+            local raw = math.min((tick() - startTime) / softDuration, 1)
+            local eased = raw < 0.5 and 2 * raw * raw or 1 - ((-2 * raw + 2) ^ 2) / 2
+            progress = math.min(eased, 0.99)
+        end
 
-    task.wait(0.05)
-end
+        progressFill.Size = UDim2.new(progress, 0, 1, 0)
+        percentLabel.Text = math.floor(progress * 100) .. "%"
 
-progressFill.Size = UDim2.new(1, 0, 1, 0)
-task.wait(0.3)
-loadingGui:Destroy()
+        if MenuOpened and progress >= 1 then
+            break
+        end
+
+        task.wait(0.03)
+    end
+
+    task.wait(0.25)
+    loadingGui:Destroy()
+end)
 
 -- ================= MAIN SCRIPT =================
 local repo = "https://raw.githubusercontent.com/deividcomsono/Obsidian/main/"
@@ -111,7 +140,6 @@ local IS_MOBILE = game:GetService("UserInputService").TouchEnabled
 
 local WindowSize = IS_MOBILE and UDim2.fromOffset(340, 300) or UDim2.fromOffset(600, 400)
 
--- Создаём окно ПРИВАЛИДНО, но сразу скроем — потом покажем с анимацией
 local Window = Library:CreateWindow({
     Title = "BRUTALSCRIPT",
     Footer = "BRUTALSCRIPT - Violence District",
@@ -140,7 +168,10 @@ task.spawn(function()
             break
         end
     end
-    if not obsidian then return end
+    if not obsidian then
+        MenuOpened = true
+        return
+    end
 
     local mainFrame
     for _, obj in ipairs(obsidian:GetDescendants()) do
@@ -149,12 +180,14 @@ task.spawn(function()
             break
         end
     end
-    if not mainFrame then return end
+    if not mainFrame then
+        MenuOpened = true
+        return
+    end
 
     local basePos = mainFrame.Position
     local baseSize = mainFrame.Size
 
-    -- Скрываем окно сразу
     mainFrame.Visible = false
     mainFrame.Position = basePos + UDim2.fromOffset(0, 60)
     mainFrame.BackgroundTransparency = 1
@@ -162,7 +195,6 @@ task.spawn(function()
 
     task.wait(0.15)
 
-    -- Показываем с анимацией: выезд снизу + fade + лёгкий "рост" по высоте
     mainFrame.Visible = true
     local startTick = tick()
     local dur = 0.55
@@ -183,6 +215,9 @@ task.spawn(function()
     mainFrame.Position = basePos
     mainFrame.BackgroundTransparency = 0
     mainFrame.Size = baseSize
+
+    -- Меню открылось — теперь загрузка может завершиться
+    MenuOpened = true
 end)
 
 -- ============== MOBILE BUTTON ==============
