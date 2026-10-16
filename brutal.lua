@@ -240,13 +240,15 @@ local Moonwalk = { Enabled = false, ShowButton = false, SpamSpeed = 30, Intensit
 local MoonwalkButton = nil
 local MoonwalkCheckbox = nil
 
--- ============== EVADE (УПРОЩЁННЫЙ) ==============
+-- ============== EVADE (ARC) ==============
 local Evade = {
     Enabled = false,
     Side = "Auto",
-    Distance = 12,
+    ArcRadius = 12,       -- радиус дуги вокруг киллера
+    ArcAngle = 120,       -- на сколько градусов обходим
+    ArcSteps = 18,        -- плавность (кол-во сегментов)
     Speed = 55,
-    Duration = 0.22,
+    Duration = 0.25,
     Cooldown = 0.3,
     Range = 12,
     Active = false,
@@ -297,7 +299,7 @@ local function isDowned()
         or char:GetAttribute("Knocked") == true
 end
 
--- ============== EVADE LOGIC ==============
+-- ============== EVADE ARC LOGIC ==============
 local function performDodge(killerRoot)
     local myRoot = getRoot()
     local hum = getHum()
@@ -305,13 +307,18 @@ local function performDodge(killerRoot)
 
     Evade.Active = true
 
-    local toKiller = killerRoot.Position - myRoot.Position
-    local flatToKiller = Vector3.new(toKiller.X, 0, toKiller.Z)
-    if flatToKiller.Magnitude < 0.01 then flatToKiller = Vector3.new(0, 0, -1) end
-    flatToKiller = flatToKiller.Unit
+    -- Направление от киллера к игроку (плоское)
+    local toMe = myRoot.Position - killerRoot.Position
+    local flatToMe = Vector3.new(toMe.X, 0, toMe.Z)
+    if flatToMe.Magnitude < 0.01 then flatToMe = Vector3.new(0, 0, 1) end
+    flatToMe = flatToMe.Unit
 
-    local right = Vector3.new(-flatToKiller.Z, 0, flatToKiller.X)
+    -- Текущий угол игрока относительно киллера
+    local startAngle = math.atan2(flatToMe.Z, flatToMe.X)
+    -- Угол обхода в радианах
+    local sweep = math.rad(Evade.ArcAngle)
 
+    -- Выбор стороны
     local sideSign
     if Evade.Side == "Auto" then
         sideSign = -Evade.LastSide
@@ -322,29 +329,9 @@ local function performDodge(killerRoot)
     end
     Evade.LastSide = sideSign
 
-    local dodgeDir = right * sideSign
-    local myPos = myRoot.Position
-    local targetPos = myPos + dodgeDir * Evade.Distance
-    targetPos = Vector3.new(targetPos.X, myPos.Y, targetPos.Z)
-
-    local rayParams = RaycastParams.new()
-    rayParams.FilterType = Enum.RaycastFilterType.Exclude
-    rayParams.FilterDescendantsInstances = { LocalPlayer.Character }
-
-    local function isFree(pos)
-        local origin = pos + Vector3.new(0, 3, 0)
-        local result = workspace:Raycast(origin, Vector3.new(0, -6, 0), rayParams)
-        return result ~= nil
-    end
-
-    if not isFree(targetPos) then
-        targetPos = myPos - dodgeDir * Evade.Distance
-        targetPos = Vector3.new(targetPos.X, myPos.Y, targetPos.Z)
-        if not isFree(targetPos) then
-            Evade.Active = false
-            return
-        end
-    end
+    -- Радиус дуги: не меньше расстояния до киллера, но хотя бы ArcRadius
+    local currentDist = flatToMe.Magnitude
+    local radius = math.max(currentDist, Evade.ArcRadius)
 
     local origSpeed = hum.WalkSpeed
     local origAutoRotate = hum.AutoRotate
@@ -352,21 +339,44 @@ local function performDodge(killerRoot)
     hum.WalkSpeed = Evade.Speed
     hum.AutoRotate = false
 
-    local look = killerRoot.Position - myPos
+    -- Поворот лицом к киллеру на время рывка
+    local look = killerRoot.Position - myRoot.Position
     look = Vector3.new(look.X, 0, look.Z)
     if look.Magnitude > 0.01 then
-        myRoot.CFrame = CFrame.new(myPos, myPos + look.Unit)
+        myRoot.CFrame = CFrame.new(myRoot.Position, myRoot.Position + look.Unit)
     end
 
-    local startTick = tick()
-    while tick() - startTick < Evade.Duration do
+    local steps = math.max(4, Evade.ArcSteps)
+    local stepTime = Evade.Duration / steps
+
+    for i = 1, steps do
         if not myRoot.Parent or not hum.Parent then break end
-        local cur = myRoot.Position
-        local rem = Vector3.new(targetPos.X - cur.X, 0, targetPos.Z - cur.Z)
-        if rem.Magnitude < 0.4 then break end
-        hum:Move(rem.Unit)
-        RunService.RenderStepped:Wait()
+        local t = i / steps
+        local angle = startAngle + sideSign * sweep * t
+
+        local offset = Vector3.new(math.cos(angle) * radius, 0, math.sin(angle) * radius)
+        local targetPos = killerRoot.Position + offset
+        targetPos = Vector3.new(targetPos.X, myRoot.Position.Y, targetPos.Z)
+
+        local dir = targetPos - myRoot.Position
+        dir = Vector3.new(dir.X, 0, dir.Z)
+        if dir.Magnitude > 0.05 then
+            hum:Move(dir.Unit)
+        end
+
+        -- Смотрим на киллера во время дуги
+        local lookNow = killerRoot.Position - myRoot.Position
+        lookNow = Vector3.new(lookNow.X, 0, lookNow.Z)
+        if lookNow.Magnitude > 0.01 then
+            myRoot.CFrame = CFrame.new(myRoot.Position, myRoot.Position + lookNow.Unit)
+        end
+
+        local t0 = tick()
+        while tick() - t0 < stepTime do
+            RunService.RenderStepped:Wait()
+        end
     end
+
     hum:Move(Vector3.zero)
 
     task.wait(0.03)
@@ -1888,23 +1898,23 @@ AbilityTab:AddCheckbox("MoonwalkButtonToggle", {
 AbilityTab:AddSlider("MoonwalkSpamSpeed", { Text = "Spam Speed", Default = Moonwalk.SpamSpeed, Min = 1, Max = 50, Rounding = 0, Callback = function(Value) Moonwalk.SpamSpeed = Value end })
 AbilityTab:AddSlider("MoonwalkIntensity", { Text = "Intensity", Default = Moonwalk.Intensity, Min = 1, Max = 50, Rounding = 1, Callback = function(Value) Moonwalk.Intensity = Value end })
 
--- ========== EVADE ==========
+-- ========== EVADE (ARC) ==========
 AbilityTab:AddLabel("Evade Keybind"):AddKeyPicker("EvadeBind", {
     Default = "Z",
     Mode = "Toggle",
-    Text = "Evade (toggle)",
+    Text = "Evade Arc (toggle)",
     Callback = function(state)
         Evade.Enabled = state
-        Notify("Evade", state)
+        Notify("Evade Arc", state)
     end
 })
 
 AbilityTab:AddCheckbox("EvadeEnable", {
-    Text = "Evade",
+    Text = "Evade Arc",
     Default = false,
     Callback = function(v)
         Evade.Enabled = v
-        Notify("Evade", v)
+        Notify("Evade Arc", v)
     end
 })
 
@@ -1916,16 +1926,34 @@ AbilityTab:AddDropdown("EvadeSide", {
     Callback = function(v) Evade.Side = v end
 })
 
-AbilityTab:AddSlider("EvadeDistance", {
-    Text = "Dodge Distance",
-    Default = 12, Min = 5, Max = 25, Rounding = 0,
-    Callback = function(v) Evade.Distance = v end
+AbilityTab:AddSlider("EvadeArcRadius", {
+    Text = "Arc Radius",
+    Default = 12, Min = 5, Max = 30, Rounding = 0,
+    Callback = function(v) Evade.ArcRadius = v end
+})
+
+AbilityTab:AddSlider("EvadeArcAngle", {
+    Text = "Arc Angle (deg)",
+    Default = 120, Min = 30, Max = 180, Rounding = 0,
+    Callback = function(v) Evade.ArcAngle = v end
+})
+
+AbilityTab:AddSlider("EvadeArcSteps", {
+    Text = "Arc Smoothness",
+    Default = 18, Min = 4, Max = 40, Rounding = 0,
+    Callback = function(v) Evade.ArcSteps = v end
 })
 
 AbilityTab:AddSlider("EvadeSpeed", {
     Text = "Dodge Speed",
     Default = 55, Min = 25, Max = 100, Rounding = 0,
     Callback = function(v) Evade.Speed = v end
+})
+
+AbilityTab:AddSlider("EvadeDuration", {
+    Text = "Dodge Duration",
+    Default = 0.25, Min = 0.05, Max = 1, Rounding = 2,
+    Callback = function(v) Evade.Duration = v end
 })
 
 AbilityTab:AddSlider("EvadeCooldown", {
@@ -1938,12 +1966,6 @@ AbilityTab:AddSlider("EvadeRange", {
     Text = "Trigger Range",
     Default = 12, Min = 5, Max = 40, Rounding = 0,
     Callback = function(v) Evade.Range = v end
-})
-
-AbilityTab:AddSlider("EvadeDuration", {
-    Text = "Dodge Duration",
-    Default = 0.22, Min = 0.05, Max = 1, Rounding = 2,
-    Callback = function(v) Evade.Duration = v end
 })
 
 AbilityTab:AddDivider()
